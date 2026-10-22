@@ -2043,7 +2043,12 @@ static uint32_t core_khz;               /* the 3D core's speed, as asked of the 
 static bool
 step_core_power(void)
 {
- if (!gmu_talks || !core_is_on) return false; core_khz=180000;return true;
+ if (!gmu_talks || !core_is_on) return false;
+ put(&gmu,"boot_oob_clear",GMU_HOST2GMU_INTR_SET,1u<<30);
+ put(&gmu,"GPU_SET",GMU_HOST2GMU_INTR_SET,1u<<16);
+ if(!wait_for(&gmu,GMU_GMU2HOST_INTR_INFO,1u<<24,1u<<24,100))return false;
+ put(&gmu,"GPU_SET_ack",GMU_GMU2HOST_INTR_CLR,1u<<24);
+ core_khz=180000;return true;
 }
 
 /* ---- step 18: the 3D core's memory and its microcode -------------------------------------------------------- */
@@ -2167,10 +2172,17 @@ ring_register(uint32_t number, uint32_t value)
 	ring(value);
 }
 
+static uint32_t sweet_core_rptr(void) {
+ to_memory(core_scratch.memory+0x100,64);
+ return *(volatile uint32_t *)(core_scratch.memory+0x100);
+}
+
 /* What has been written to the ring since the last time: out to memory, and the core told how far to read. */
 static void
 ring_send(void)
 {
+ ring_command(0x62,2); /* CP_WHERE_AM_I, required by this A630 SQE */
+ ring(CORE_SCRATCH_ADDRESS+0x100);ring(0);
 	if (ring_at >= ring_sent) {
 		to_memory(core_ring.memory + 4 * ring_sent, 4 * (ring_at - ring_sent));
 	} else {
@@ -2193,7 +2205,7 @@ ring_run(const char *what)
 	ring_send();
 	for (int i = 0; i < 20000 && (taken != ring_at || (status & ~1u)); i++) {
 		sleep_us(100);
-		taken = rd(gpu.base + CP_RB_RPTR);
+		taken = sweet_core_rptr();
 		status = rd(gpu.base + RBBM_STATUS);
 	}
 	if (taken == ring_at && !(status & ~1u) && rd(gpu.base + CP_HW_FAULT) == 0 && !space_faulted(&core_space)) {
@@ -2458,7 +2470,8 @@ step_core_start(void)
 	PE_parse_boot_argn("adreno_blind", &blind, sizeof(blind));
 	put64(&gpu, "cp_sqe_instr_base", CP_SQE_INSTR_BASE, blind ? CORE_NOWHERE : CORE_SQE_ADDRESS);
 	put64(&gpu, "cp_rb_base", CP_RB_BASE, CORE_RING_ADDRESS);
-	put(&gpu, "cp_rb_cntl", CP_RB_CNTL, CP_RB_CNTL_VALUE);
+	put64(&gpu,"cp_rb_rptr_addr",GPU_WORD(0x0804),CORE_SCRATCH_ADDRESS+0x100);
+ put(&gpu, "cp_rb_cntl", CP_RB_CNTL, CP_RB_CNTL_VALUE);
 	get(&gpu, "cp_sqe_instr_base", CP_SQE_INSTR_BASE);
 	get(&gpu, "cp_rb_base", CP_RB_BASE);
 	get(&gpu, "cp_rb_cntl", CP_RB_CNTL);
@@ -2473,7 +2486,7 @@ step_core_start(void)
 	printf("adreno: %u: alive after it; status %#x, interrupts %#x, command processor: fault %#x, interrupts %#x, "
 	    "protection %#x, ring read up to %u\n", step, rd(gpu.base + RBBM_STATUS), rd(gpu.base + RBBM_INT_0_STATUS),
 	    rd(gpu.base + CP_HW_FAULT), rd(gpu.base + CP_INTERRUPT_STATUS), rd(gpu.base + CP_PROTECT_STATUS),
-	    rd(gpu.base + CP_RB_RPTR));
+	    sweet_core_rptr());
 	get(&smmu, "sgfsr", SMMU_SGFSR);
 	get(&smmu, "sgfsynr0", SMMU_SGFSR + 8);
 	get(&smmu, "sgfsynr1", SMMU_SGFSR + 12);
@@ -2747,25 +2760,27 @@ gpu_block_stop(void)
 		/* (what the core looks like when it is given back: a GMU that then does not answer may have its reasons here) */
 		printf("adreno: %u: the 3D core before it is stopped: status %#x, interrupts %#x, ring read up to %u of %u; the GMU "
 		    "sees it busy: %#x\n", step, rd(gpu.base + RBBM_STATUS), rd(gpu.base + RBBM_INT_0_STATUS),
-		    rd(gpu.base + CP_RB_RPTR), ring_at, rd(gmu.base + GMU_AO_GPU_CX_BUSY_STATUS));
+		    sweet_core_rptr(), ring_at, rd(gmu.base + GMU_AO_GPU_CX_BUSY_STATUS));
 		core_bus_halt(core_stuck);
 		printf("adreno: %u: the GPU block's bus has been halted%s (rbbm_gbif_halt_ack %#x, gbif halt_ack %#x)\n", step,
 		    core_stuck ? ", the 3D core's side too, and stays so" : " and let go again", rd(gpu.base + RBBM_GBIF_HALT_ACK),
 		    rd(gbif.base + GBIF_HALT_ACK));
 	}
 	if (core_is_on) {
-		put(&gmu, "host2gmu_intr_set", GMU_HOST2GMU_INTR_SET, 1u << 31);
+		put(&gmu, "host2gmu_intr_set", GMU_HOST2GMU_INTR_SET, 1u << 24);
 		core_is_on = false;
 	}
 	if (gmu_talks) {
-		hfi_send("\"slumber\"", HFI_PREPARE_SLUMBER, slumber, 3);
-		if (!wait_for(&gmu, GMU_AO_GPU_CX_BUSY_STATUS, 1u << 23, 0, 100)) {
-			get(&gmu, "ao_gpu_cx_busy_status", GMU_AO_GPU_CX_BUSY_STATUS);
-		}
-		get(&gmu, "sptprac_pwr_clk_status", GMU_SPTPRAC_PWR_CLK_STATUS);
-		get(&gpucc, "gx_gdscr", GPUCC_GX_GDSCR);
-		gmu_talks = false;
-	}
+        put(&gpucc,"gx_retention",GPUCC_GX_GDSCR,rd(gpucc.base+GPUCC_GX_GDSCR)|(1u<<11));
+        put(&gmu,"sptprac_off",GMU_GX_SPTPRAC_POWER_CONTROL,0x778001);
+        if(!wait_for(&gmu,GMU_SPTPRAC_PWR_CLK_STATUS,4,4,100))printf("sweet: SPTPRAC shutdown timeout\n");
+        put(&gmu,"legacy_slumber",GMU_BOOT_SLUMBER_OPTION,1);
+        put(&gmu,"boot_slumber",GMU_HOST2GMU_INTR_SET,1u<<22);
+        if(!wait_for(&gmu,GMU_GMU2HOST_INTR_INFO,1u<<30,1u<<30,100))printf("sweet: legacy slumber timeout\n");
+        put(&gmu,"slumber_ack",GMU_GMU2HOST_INTR_CLR,1u<<30);
+        put(&gmu,"slumber_clear",GMU_HOST2GMU_INTR_SET,1u<<30);
+        gmu_talks=false;
+    }
 	if (gmu_runs) {
 		put(&gmu, "cm3_sysreset", GMU_CM3_SYSRESET, 1);
 		gmu_runs = false;
@@ -3299,10 +3314,10 @@ redwood_gpu_worked(uint64_t *microseconds, uint32_t *submissions, uint32_t by[7]
 uint32_t
 redwood_gpu_submit(const uint64_t *addresses, const uint32_t *words, uint32_t count)
 {
-	uint32_t wanted = 26 + 4 * count, room = 0;
+	uint32_t wanted = 29 + 4 * count, room = 0;
 
 	for (int i = 0; i < 20000; i++) {
-		room = (rd(gpu.base + CP_RB_RPTR) + RING_WORDS - ring_at - 1) % RING_WORDS;
+		room = (sweet_core_rptr() + RING_WORDS - ring_at - 1) % RING_WORDS;
 		if (room >= wanted) {
 			break;
 		}
@@ -3348,7 +3363,7 @@ redwood_gpu_report(const char *why)
 
 	printf("adreno: gpu: %s: submission %u is the last, the core has done %u; ring: read up to %u, written up to %u; status "
 	    "%#x, interrupts %#x; command processor: fault %#x, interrupts %#x, protection %#x\n", why, gpu_fence,
-	    *(volatile uint32_t *)(core_scratch.memory + GPU_FENCE_AT), rd(gpu.base + CP_RB_RPTR), ring_at,
+	    *(volatile uint32_t *)(core_scratch.memory + GPU_FENCE_AT), sweet_core_rptr(), ring_at,
 	    rd(gpu.base + RBBM_STATUS), rd(gpu.base + RBBM_INT_0_STATUS), rd(gpu.base + CP_HW_FAULT),
 	    rd(gpu.base + CP_INTERRUPT_STATUS), rd(gpu.base + CP_PROTECT_STATUS));
 	printf("adreno: gpu:   in the first command buffer at %#llx, %u words to go; in the second at %#llx, %u to go\n",
@@ -3456,7 +3471,7 @@ redwood_gpu_recover(void)
 	 * The two positions are made equal, whatever it says, so there is nothing to fetch until
 	 * something is submitted; step 20 then writes the ring's address and size again itself.
 	 */
-	ring_at = ring_sent = rd(gpu.base + CP_RB_RPTR) % RING_WORDS;
+	ring_at = ring_sent = sweet_core_rptr() % RING_WORDS;
 	wr(gpu.base + CP_RB_WPTR, ring_at);
 	wr(gpu.base + RBBM_INT_CLEAR_CMD, rd(gpu.base + RBBM_INT_0_STATUS));    /* so that what is reported next is this core's */
 	printf("adreno: gpu: the 3D core's half has been reset: status %#x, interrupts %#x, ring at %u; the GMU sees it busy: "

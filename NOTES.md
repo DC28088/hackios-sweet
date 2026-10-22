@@ -61,3 +61,10 @@ creates a second userland checkout over tracked files; xl requires out/loader
 and out/kernel Sweet artifacts and defaults to Sweet bootargs. No Redwood
 prebuilt fallback. Root preparation still needed for iOS16.5; host free space
 ~4.8GiB is below upstream extraction's ~8GB requirement, so no download begun.
+
+A618 review caught two further A660 assumptions before hardware boot: SQE
+needs CP_RB_RPTR_ADDR plus CP_WHERE_AM_I memory shadow; ring_send now emits
+it, reads invalidate/acquire the dedicated scratch line, submit reserves3
+extra words. Core GPU_SET OOB uses legacy request16/ack24, and shutdown uses
+legacy BOOT_SLUMBER request22/ack30, not the uninitialized modern HFI table.
+Latest kernel build is required; earlier source artifacts are superseded.
