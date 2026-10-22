@@ -11,6 +11,23 @@ p.add_argument('--out',required=True,type=Path)
 a=p.parse_args();fw=a.firmware
 fd=(fw/'SWEET_UEFI.fd').read_bytes();shim=(fw/'BootShim.bin').read_bytes();dtb=(fw/'sweet.dtb').read_bytes()
 assert len(fd)==0x300000 and shim[56:60]==b'ARM\x64' and dtb[:4]==b'\xd0\x0d\xfe\xed'
+# Match the measured Sweetin bootloader board ID. This changes only the
+# public identity cells in the generic published Sweet DTB, no device dump.
+dtb=bytearray(dtb);pos,strings=struct.unpack_from('>II',dtb,8);depth=-1;bound=False
+while True:
+ token=struct.unpack_from('>I',dtb,pos)[0];pos+=4
+ if token==1:
+  depth+=1;end=dtb.index(0,pos);pos=(end+4)&~3
+ elif token==2:depth-=1
+ elif token==3:
+  size,key=struct.unpack_from('>II',dtb,pos);pos+=8;end=dtb.index(0,strings+key);name=bytes(dtb[strings+key:end])
+  if depth==0 and name==b'qcom,board-id':
+   assert size==8;struct.pack_into('>II',dtb,pos,46,0);bound=True
+  pos=(pos+size+3)&~3
+ elif token==9:break
+ elif token!=4:raise ValueError('Unexpected DTB token')
+assert bound,'Missing root board identity'
+dtb=bytes(dtb)
 loader=a.loader.read_bytes();assert loader[:2]==b'MZ'
 off=struct.unpack_from('<I',loader,60)[0];assert loader[off:off+4]==b'PE\0\0' and struct.unpack_from('<H',loader,off+4)[0]==0xaa64
 items={'loader.efi':loader,'usb':b'1\0'}
@@ -30,7 +47,7 @@ id=hashlib.sha1(kernel+struct.pack('<I',len(kernel))+struct.pack('<I',0)+struct.
 header[576:608]=id+bytes(12)
 a.out.parent.mkdir(parents=True,exist_ok=True)
 with a.out.open('xb') as f:f.write(header);f.write(kernel);f.write(bytes(-len(kernel)%page))
-report={'device':'sweet','mode':'resident HackiOS USB loader','ios_userland_required':'iOS16.5 APFS system and helper images; prepared separately','hardware_booted':False,'gpu_rendering_verified':False,'files':{}}
+report={'device':'sweet','mode':'resident HackiOS USB loader','ios_userland_required':'iOS16.5 APFS system and helper images; prepared separately','hardware_booted':False,'embedded_dtb_board_id':[46,0],'embedded_dtb_sha256':hashlib.sha256(dtb).hexdigest(),'gpu_rendering_verified':False,'files':{}}
 for name,path in {'boot':a.out,'uefi':fw/'SWEET_UEFI.fd','shim':fw/'BootShim.bin','dtb':fw/'sweet.dtb','loader':a.loader,**({'kernel':a.kernel} if a.kernel else {})}.items():
  report['files'][name]={'path':str(path),'bytes':path.stat().st_size,'sha256':hashlib.sha256(path.read_bytes()).hexdigest()}
 a.out.with_suffix('.json').write_text(json.dumps(report,indent=2)+'\n')
