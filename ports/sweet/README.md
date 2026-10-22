@@ -55,6 +55,22 @@ finish. The helper includes GLES and its backboardd/SpringBoard injection
 libraries, with no Wi-Fi credentials or SSH private keys. This command does
 not communicate with the phone. Apple images and vendor firmware stay local.
 
+For a private CI build, download that run's `sweet-ios165-apfs` artifact into
+an empty local directory, then run:
+
+```sh
+bash ports/sweet/complete-private-root.sh /absolute/path/to/artifact
+```
+
+The importer verifies the artifact hashes and source lock, installs its system
+image, and rebuilds the helper with this computer's verified Sweet firmware.
+`userland/root` must not already exist when importing. `record-root.py`
+records image hashes only after checking the helper's GLES libraries, firmware
+and backboardd/SpringBoard injection configuration. CI does not receive vendor
+firmware. Apple filesystem output must stay in private artifacts or local
+files, outside Git. APFS compression defaults to two workers in these wrappers
+and keeps a bounded number of large files in memory.
+
 The installed ios-sweet16.7.16 HFS+ userdata is a different root layout. It
 was left untouched throughout this port. Booting this kernel against it is
 not an installation method. The former `/usr/lib/sweetgl.dylib` uses another

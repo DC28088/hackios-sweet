@@ -39,29 +39,4 @@ env -u CHECK -u FLASHBOOT -u CRYPTEXES -u ADSP -u METAL -u AIR -u STOREFRONT \
     -u JB -u JOBS -u INJECT -u RC -u RC_JOBS -u EXTRA_SHARE -u QUIET \
     PREBUILT=1 GL=1 REST=1 SHARE=1 WIFID=0 APFS_JOBS="${APFS_JOBS:-2}" GLES_PREBUILT_DIR="$GLES_DIR" \
     bash userland/build.sh
-python3 - <<'PY'
-import hashlib, json, pathlib, struct
-root = pathlib.Path.cwd()
-entries = []
-for name in ('root.apfs', 'system.apfs'):
-    path = root/'userland'/name
-    with path.open('rb') as f:
-        header = f.read(4096)
-        if header[32:36] != b'NXSB':
-            raise SystemExit(f'{path}: missing APFS container header')
-        block_size, blocks = struct.unpack_from('<IQ', header, 36)
-        if block_size != 4096 or blocks*block_size != path.stat().st_size:
-            raise SystemExit(f'{path}: inconsistent APFS container size')
-        f.seek(0)
-        digest = hashlib.file_digest(f, 'sha256').hexdigest()
-    entries.append({'file': name, 'bytes': path.stat().st_size, 'sha256': digest})
-out = root/'out/root'
-out.mkdir(parents=True, exist_ok=True)
-(out/'SHA256SUMS').write_text(''.join(f"{e['sha256']}  ../../userland/{e['file']}\n" for e in entries))
-(out/'manifest.json').write_text(json.dumps({'ios': '16.5', 'build': '20F66', 'device': 'sweet',
-    'source_lock': json.loads((root/'upstream-lock.json').read_text()), 'images': entries,
-    'gles': str(pathlib.Path(__import__('os').environ['GLES_DIR'])),
-    'hardware_tested': False}, indent=2)+'\n')
-for entry in entries:
-    print(f"{entry['file']}: {entry['bytes']:,} bytes; SHA256 {entry['sha256']}")
-PY
+python3 ports/sweet/record-root.py

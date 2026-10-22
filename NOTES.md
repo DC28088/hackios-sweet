@@ -1,5 +1,23 @@
 # HackiOS Sweet handoff
 
+## APFS preparation in progress (2026-10-22)
+
+User approved deleting only research/ipsw-x/ios16-root-20H392.simg in the old
+ios-sweet checkout. That generated file was deleted; original .img, downloads
+and phone installation retained. About13GiB free afterwards. Local Apple CDN
+delivery was only~300KiB/s total; completed1MiB ranges are retained in
+ios165/rootfs.dmg.part.ranges, with the local fetch paused.
+
+Created PRIVATE DC28088/hackios-sweet-root-build for APFS preparation only.
+Run39777162503 is assembling iOS16.5 from public source96a1f12 and exact GLES
+run39772020663 libraries. Only workflow/source pointers and compiled GLES
+inputs are in its Git tree. Apple files stay in private Actions artifacts;
+no vendor firmware/device dump was uploaded. Final helper must be rebuilt
+locally with Sweet firmware after importing root-stage.tar.gz/system.apfs.
+New complete-private-root.sh and record-root.py support that import, matching
+library/firmware checks, source-lock verification and image metadata. No
+tests, USB access or device writes performed. Waiting for private CI result.
+
 ## Built image (read first, 2026-10-22)
 
 - **Final kernel/loader CI39773636216 SUCCESS**, source659167c3c90ed64f6db6ec24adacb6886b12babd.
