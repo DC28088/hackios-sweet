@@ -38,9 +38,22 @@ accepted by the launch path. Old Redwood prebuilt images are not substitutes.
 
 HackiOS expects the iPhone X iOS16.5/20F66 root and cryptexes as APFS images.
 Its original extraction/build procedure is in `ios165/fetch.sh` and
-`userland/build.sh`. It needs roughly8GB free during extraction; this host
-currently has less. Downloading firmware was not started during the boot
-image build.
+`userland/build.sh`. From the repository root, run:
+
+```sh
+bash ports/sweet/prepare-root.sh
+```
+
+Allow 12 GiB free for extraction, compressed output and its temporary spool.
+The wrapper downloads iOS16.5 directly from Apple's CDN, verifies the compiled
+GLES artifact and private Sweet firmware, and assembles `userland/root.apfs`
+and `userland/system.apfs`. Override `GLES_DIR` or `GPU_FW_DIR` for another
+local artifact directory. The firmware directory needs its checksum manifest.
+The default GLES artifact is run39772020663; its source lock must match this
+repository. Image hashes and metadata go in `out/root/` after both images
+finish. The helper includes GLES and its backboardd/SpringBoard injection
+libraries, with no Wi-Fi credentials or SSH private keys. This command does
+not communicate with the phone. Apple images and vendor firmware stay local.
 
 The installed ios-sweet16.7.16 HFS+ userdata is a different root layout. It
 was left untouched throughout this port. Booting this kernel against it is

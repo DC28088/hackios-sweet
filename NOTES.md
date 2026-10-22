@@ -113,3 +113,16 @@ is72KiB ARM64 PE. Final kernel39773636216 and loader job still awaiting
 kernel completion; loader job already SUCCESS. Packaging now patches only
 qcom,board-id to measured Sweetin[46,0] and records embedded DTB hash; no live
 FDT dump is copied. See ports/sweet/README.md for exact scope and root layout.
+APFS preparation requested. Added ports/sweet/prepare-root.sh to verify the
+matching GLES artifact/source lock and private A618 firmware, fetch Apple's
+iOS16.5 components, then build GL=1/PREBUILT=1/REST=1/SHARE=1/WIFID=0 RAM images.
+userland/build.sh now accepts GLES_PREBUILT_DIR after its static prebuilt copy,
+and does not require an optional gl_test executable for a runtime-only build.
+No tests run. Host has 7-Zip26.01 and cc; unzbm utility compiled locally.
+App cryptex096-03536-083.dmg downloaded (10,485,760bytes), extracted and LZBITMAP
+files expanded; webbookmarksd is364KiB, no remaining compressed sidecars.
+Full preparation currently waiting on storage:4.6GiB free versus12GiB guard.
+Asked permission to remove only the old generated16.7.16 .simg (12GB) while
+retaining its source .img, downloads and phone installation, or use another
+storage path. No deletion or phone access performed.
+

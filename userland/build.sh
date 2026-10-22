@@ -159,6 +159,20 @@ else
 	done
 fi
 
+# A separately compiled GLES artifact may accompany the static prebuilt tools.
+# Copy it after the prebuilt loop so its injection libraries stay matched.
+if [ -n "$GLES_PREBUILT_DIR" ]; then
+	[ -n "$GL" ] && [ -n "$PREBUILT" ] || {
+		echo "build.sh: GLES_PREBUILT_DIR requires GL and PREBUILT" >&2; exit 1;
+	}
+	for f in libOSMesa.8.dylib libredwood-gl.dylib libredwood.dylib libredwood-sb.dylib; do
+		[ -s "$GLES_PREBUILT_DIR/$f" ] || {
+			echo "build.sh: missing GLES artifact $GLES_PREBUILT_DIR/$f" >&2; exit 1;
+		}
+		cp "$GLES_PREBUILT_DIR/$f" obj/
+	done
+fi
+
 # --- the small image ------------------------------------------------------------------------------
 rm -rf root
 mkdir -p root/sbin root/bin root/etc root/share root/LaunchDaemons
@@ -470,7 +484,8 @@ if [ -d $IOS/rootfs/usr/lib ]; then
 	fi
 	if [ -n "$GL" ]; then
 		cp obj/libOSMesa.8.dylib root/lib/
-		cp obj/gl_test root/bin/
+		# The runtime artifact need not include an optional diagnostic executable.
+		if [ -f obj/gl_test ]; then cp obj/gl_test root/bin/; fi
 		if [ -f obj/u2f_test ]; then cp obj/u2f_test root/bin/; fi   # an "if": see the inject.conf loop below
 		[ -f obj/air_run ] && cp obj/air_run root/bin/
 		[ "$GL" = test ] || cp obj/libredwood-gl.dylib root/lib/
