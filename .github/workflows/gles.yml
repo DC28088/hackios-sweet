@@ -1,0 +1,37 @@
+name: HackiOS Sweet GLES
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang llvm lld flex bison autoconf automake libtool libncurses-dev python3-venv meson ninja-build libz-dev
+          bash ports/sweet/setup-toolchain.sh
+      - name: Compile Mesa and EAGL
+        env:
+          THEOS: ${{ github.workspace }}/.theos
+        run: |
+          xnu-deps/setup.sh --stage1
+          bash ports/sweet/build-gles.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hackios-sweet-gles
+          path: out/userland/
+      - name: Save compile diagnostics
+        if: failure()
+        run: |
+          mkdir -p out/diagnostics
+          cp xnu-deps/build/mesa/*.log out/diagnostics/ 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: hackios-sweet-gles-diagnostics
+          path: out/diagnostics/

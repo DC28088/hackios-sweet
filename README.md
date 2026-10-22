@@ -1,3 +1,19 @@
+# HackiOS for Redmi Note 10 Pro (Sweet)
+
+Experimental port of [HackiOS kernel](https://github.com/oosexgang/hackios-xnu-kernel)
+and [HackiOS userspace](https://github.com/oosexgang/hackios-xnu-userland) to
+SM7150 / Adreno618. Source pins: [upstream-lock.json](upstream-lock.json).
+
+**Status:** source adaptation and compilation in progress. No Sweet boot or
+GPU rendering has been established. The functionality described in the
+upstream README below belongs to Redwood and is not a claim about Sweet.
+
+This uses HackiOS's iOS16.5 APFS architecture. The prior ios-sweet16.7.16 HFS+
+root is incompatible and remains preserved. Build artifacts and installation
+instructions will be recorded in NOTES.md. No phone is flashed by CI.
+
+---
+
 # HackiOS — XNU kernel
 
 **HackiOS** boots Apple's open-source **XNU kernel** (`xnu-8796.121.2`, the kernel of iOS 16.5) on Android phone
