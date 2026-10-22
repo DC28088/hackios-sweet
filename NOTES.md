@@ -40,3 +40,10 @@ loaderCOFF fixup.39772127622 identifies ADRP block_buffer+1MiB addend and SMC
 assembler feature check. Replaced constant-addend pointer with opaque base,
 SMC encoding with identical architectural .inst. Kernel export log now emitted
 on failure. GLES39772020663 still building at time of this entry.
+
+GLES CI39772020663 SUCCESS; artifacts downloaded out/gles-39772020663:
+libOSMesa.8.dylib, libredwood-gl.dylib and backboardd/SpringBoard libraries.
+Source2048b0f. No runtime test. Kernel39772464704 failed on missing host
+uuid/uuid.h before exporthdrs; added uuid-dev. Firmware still running.
+Latest work also closes direct write_logs partition paths (not only flush_log),
+adds bounded touch-power synchronization and A618 register protection table.

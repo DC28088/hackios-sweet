@@ -798,4 +798,19 @@ out:
 	__atomic_store_n(&rh_lock, 0, __ATOMIC_RELEASE);
 	return error;
 }
+
+/* Bootstrap may run beside the touch thread. Wait for the one shared RPMh
+ * owner to finish that first rail vote; do not race or repeatedly vote. */
+int sweet_rpmh_wait_touch_ready(void) {
+ for(unsigned n=0;n<5000;++n) {
+  if(!__atomic_exchange_n(&rh_lock,1,__ATOMIC_ACQUIRE)) {
+   bool ready=rh_touch_ready,failed=rh_poisoned;
+   __atomic_store_n(&rh_lock,0,__ATOMIC_RELEASE);
+   if(failed)return EIO;
+   if(ready)return 0;
+  }
+  delay(1000);
+ }
+ return ETIMEDOUT;
+}
 #endif /* ARM64_BOARD_CONFIG_SWEET */

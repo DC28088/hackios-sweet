@@ -331,7 +331,7 @@ static void hc_take_back(const char *when);
 static void
 write_logs(const char *klog, uint64_t klog_len)
 {
-	efi_block_io *bio = find_log_partition();
+	efi_block_io *bio = NULL; /* Sweet: logs stay in RAM/USB, no raw partition writes. */
 
 	compose_logs(klog, klog_len);
 	if (bio == NULL) {
@@ -381,7 +381,6 @@ write_logs(const char *klog, uint64_t klog_len)
 static void
 flush_log(void)
 {
-	return; /* Sweet: live RAM log only, never overwrite a partition. */
 	write_logs(NULL, 0);
 }
 

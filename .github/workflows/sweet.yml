@@ -2,6 +2,9 @@ name: HackiOS Sweet
 on:
   workflow_dispatch:
     inputs:
+      kernel_only:
+        type: boolean
+        default: false
       firmware_only:
         type: boolean
         default: false
@@ -17,7 +20,7 @@ jobs:
       - name: Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang llvm lld flex bison autoconf automake libtool libncurses-dev python3-venv meson ninja-build libz-dev
+          sudo apt-get install -y clang llvm lld flex bison autoconf automake libtool libncurses-dev uuid-dev python3-venv meson ninja-build libz-dev
           bash ports/sweet/setup-toolchain.sh
       - name: Build Sweet XNU
         env:
@@ -37,6 +40,7 @@ jobs:
           name: hackios-sweet-kernel
           path: out/kernel/
   firmware:
+    if: ${{ !inputs.kernel_only }}
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     steps:
@@ -62,6 +66,7 @@ jobs:
           mkdir -p out/firmware
           cp uefi-sweet/Build/sweetPkg/DEBUG_CLANGPDB/FV/SWEET_UEFI.fd out/firmware/
           cp xnuloader/loader.efi out/firmware/
+          cp uefi-sweet/Mu-sweet.img out/firmware/template.img
           clang --target=aarch64-linux-gnu -c ports/sweet/BootShim.S -o out/firmware/shim.o
           ld.lld -Ttext=0 --entry=_start out/firmware/shim.o -o out/firmware/shim.elf
           llvm-objcopy -O binary out/firmware/shim.elf out/firmware/BootShim.bin
@@ -84,3 +89,18 @@ jobs:
         with:
           name: hackios-sweet-firmware-diagnostics
           path: out/diagnostics/
+
+  loader:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile Sweet EFI loader
+        run: |
+          xnuloader/build.sh
+          mkdir -p out/loader
+          cp xnuloader/loader.efi out/loader/
+          (cd out/loader && sha256sum loader.efi > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hackios-sweet-loader
+          path: out/loader/

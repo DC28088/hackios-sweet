@@ -521,6 +521,7 @@ cx_is_on(void)
 }
 
 static void stale_stop(void);
+extern int sweet_rpmh_wait_touch_ready(void);
 extern int sweet_rpmh_arc_raise(const char *,unsigned);
 extern int sweet_rpmh_arc_require(const char *,unsigned);
 
@@ -532,7 +533,7 @@ extern int sweet_rpmh_arc_require(const char *,unsigned);
 static bool
 step_cx_power(void)
 {
- if(sweet_rpmh_arc_require("cx.lvl",48) || sweet_rpmh_arc_require("mx.lvl",80) || sweet_rpmh_arc_raise("gfx.lvl",48))return false;
+ if(sweet_rpmh_wait_touch_ready() || sweet_rpmh_arc_require("cx.lvl",48) || sweet_rpmh_arc_require("mx.lvl",80) || sweet_rpmh_arc_raise("gfx.lvl",48))return false;
 	uint32_t gdscr;
 
 	if (!gpucc_answers()) {
@@ -2412,6 +2413,43 @@ step_core_start(void)
 	put(&gpu, "rbbm_gbif_client_qos_cntl", RBBM_GBIF_CLIENT_QOS_CNTL, 0);
 	/* APRIV is A650+, keep A618 privilege configuration inherited. */
 	put(&gpu, "rb_dbg_eco_cntl", RB_DBG_ECO_CNTL, 0x04100000);     /* Mesa's value for this GPU */
+ static const uint32_t protect[32] = {
+  0x13fc0000,
+  0x00140501,
+  0x0bd0050b,
+  0x8000050e,
+  0x80000510,
+  0x80000534,
+  0x82080800,
+  0x802008a0,
+  0x809008ab,
+  0x02b808de,
+  0x81340900,
+  0x89c8098d,
+  0x80040e00,
+  0x80300e03,
+  0x830c3c00,
+  0x7ffc3cc4,
+  0x873c8630,
+  0x80008e00,
+  0x80008e08,
+  0x807c8e50,
+  0x876c9624,
+  0x80049e70,
+  0x861c9e78,
+  0x873ca630,
+  0x8000ae02,
+  0x8cbcae50,
+  0x8000b604,
+  0x8004be02,
+  0xdf7cbe20,
+  0xaffcf000,
+  0x7ffcfc00,
+  0x80011c00,
+ };
+ for (unsigned i = 0; i < 32; ++i) wr(gpu.base + (0x850 + i) * 4,protect[i]);
+ wr(gpu.base + 0x084f * 4,0xb);
+
 	/*
 	 * adreno_blind=1: the command processor is started with its microcode at an address where
 	 * nothing is. All it can do then is ask the SMMU for it, and the SMMU's record of the refusal
