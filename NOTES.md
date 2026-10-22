@@ -207,3 +207,16 @@ non-platform29/default path sets override4 (peripheral). Both input binaries
 are hash-guarded. No imported Redwood USB binary or new binary patch. Loader
 also reports init-event creation/signalling errors instead of hiding them.
 Firmware rebuild pending; no hardware validation or GPU rendering claim.
+
+Topaz reference reviewed at e4772911e116ab4ab6c4ac1f38e6106fefe8b483:
+0901 TopazAdreno.cpp, eagl.c, topaz_inject.c, WLAN0123 and CREDITS. It shares
+HackiOS RedwoodGPU/Mesa/EAGL ABI, but its A610 has no GMU; A618 needs its
+existing GMU/HFI path. Found a concrete A618 mismatch: hardware UBWC setup
+uses highest-bank-bit14, while msm GET_PARAM exposed13 to Mesa. Corrected
+GET_PARAM to14, matching Linux v6.12 a6xx_calc_ubwc_config and our registers.
+This fixes a layout mismatch, not evidence of completed GPU rendering.
+Topaz's fixed QuartzCore hooks target16.7; our prepared HackiOS root is16.5,
+so keep the matching16.5 injection addresses. Topaz WLAN0123 maps CE under
+0x0c800000 with stream0x1a0; Sweet public DTS has ICNSS0x18800000 and stream
+0x240, SMEM0x86000000. Its modem/transport code needs a Sweet hardware port;
+do not enable the Redwood ath11k path or copy Topaz addresses blindly.

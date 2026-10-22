@@ -3080,7 +3080,10 @@ redwood_gpu_parameter(uint32_t which, uint64_t *value)
 		*value = 1;
 		return true;
 	case 0x10:                              /* HIGHEST_BANK_BIT */
-		*value = 13;
+		/* A618: match core_setup's UBWC registers and Linux
+		 * a6xx_calc_ubwc_config. A610 uses 13, but A618 uses 14.
+		 * Mesa needs the same layout as the hardware for tiled buffers. */
+		*value = 14;
 		return true;
 	case 0x12:                              /* UBWC_SWIZZLE */
 		*value = 6;
