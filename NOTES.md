@@ -3,8 +3,8 @@
 ## UEFI boot failure correction (2026-10-22)
 
 User photo shows old boot14ab4eb6 stopping in DynamicRamDxe.c:151:
-AddMemorySpace(A2370000,5DC90000) and then (A2370000,15DC90000) return
-Access Denied, followed by EFI_NOT_READY. XNU has not started. The added
+AddMemorySpace(A2370000,5DC90000) and a larger request from the same base
+return Access Denied, followed by EFI_NOT_READY. XNU has not started. The added
 F0000000..F4000000 payload reservation intersects the first dynamic RAM bank.
 Original DynamicRamDxe adds the whole bank without excluding GCD reservations;
 after that failure it incorrectly treats the next bank as another first bank.
@@ -14,6 +14,11 @@ RAM, preserve reserved/MMIO regions including the payload, and process each
 SMEM bank independently. Registration/attribute errors propagate rather than
 being hidden. Building corrected UEFI next; no hardware result yet. Kernel,
 GLES and verified APFS images are unchanged. No tests or device commands.
+Firmware CI39820327732 on addd022 is running; loader job already passed.
+Rechecked both APFS SHA256 values locally: match. Also fixed package.py to
+atomically replace its generated output: xl enter's repeated xnu-usb.img
+build otherwise failed with FileExistsError. Package source0566e64 or later
+is required for repeated sessions; the RAM firmware change itself is addd022.
 
 ## APFS root prepared (2026-10-22)
 
