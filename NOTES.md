@@ -1,25 +1,30 @@
 # HackiOS Sweet handoff
 
-## APFS preparation in progress (2026-10-22)
+## APFS root prepared (2026-10-22)
 
-User approved deleting only research/ipsw-x/ios16-root-20H392.simg in the old
-ios-sweet checkout. That generated file was deleted; original .img, downloads
-and phone installation retained. About13GiB free afterwards. Local Apple CDN
-delivery was only~300KiB/s total; completed1MiB ranges are retained in
-ios165/rootfs.dmg.part.ranges, with the local fetch paused.
+iOS16.5/20F66 system and helper images are built and verified locally:
 
-Created PRIVATE DC28088/hackios-sweet-root-build for APFS preparation only.
-Run39777162503 fetched all three Apple components with ZIP CRC-32 verification
-and extracted them, then stopped because prebuilt/userland has no optional
-drawable_test executable. Fixed that copy requirement in public source8c9682a.
-Retry39778207769 is assembling from that pin and exact GLES
-run39772020663 libraries. Only workflow/source pointers and compiled GLES
-inputs are in its Git tree. Apple files stay in private Actions artifacts;
-no vendor firmware/device dump was uploaded. Final helper must be rebuilt
-locally with Sweet firmware after importing root-stage.tar.gz/system.apfs.
-New complete-private-root.sh and record-root.py support that import, matching
-library/firmware checks, source-lock verification and image metadata. No
-tests, USB access or device writes performed. Waiting for private CI result.
+- `userland/system.apfs`: 2,492,203,008 bytes, SHA256
+  `ccfdbc0a8c7f3166eed76ca6e14fe9a1060d58884cda408aca2354447d7c55e7`.
+- `userland/root.apfs`: 5,799,936 bytes, SHA256
+  `a54bb3e83114c140b287fcc6e73720e8378c8084ad4f56d20045ff1cbf668125`.
+- `out/root/manifest.json` and `out/root/SHA256SUMS` record the inputs;
+  `hardware_tested` is false.
+
+The helper was rebuilt from private APFS run39778207769 (source8c9682a),
+GLES run39772020663 and the local A618/A630 firmware. `record-root.py`
+verified the matching GLES libraries, firmware hashes, backboardd/SpringBoard
+injection, APFS NXSB geometry and the absence of SSH/Wi-Fi credentials.
+The private artifact was staged through a temporary private release
+(run39796248307) because the Actions artifact signed link expired and its
+endpoint was throttled; the transferred image hash matches the private build.
+Temporary release/local staging is being removed. Apple images stay out of
+Git and outside the public repository.
+
+**No boot, flash, phone mount, USB command or userdata write was performed.**
+Hardware boot and GPU/UI acceleration remain unverified. The existing
+iOS16.7.16 HFS+ userdata installation is untouched; these APFS images are
+prepared for a separate HackiOS USB-loader session.
 
 ## Built image (read first, 2026-10-22)
 
