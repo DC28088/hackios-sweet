@@ -195,3 +195,15 @@ Asked permission to remove only the old generated16.7.16 .simg (12GB) while
 retaining its source .img, downloads and phone installation, or use another
 storage path. No deletion or phone access performed.
 
+
+2026-10-22 USB peripheral fix: user reports Project Silicium screen and
+UsbDeviceOpenProtocols USB FN IO NOT_FOUND after the RAM fix. Pinned Sweet
+Device-Binaries e9ebb074 selects UsbConfigDxe.patched.efi. Disassembly shows
+its sole changed instruction at 0x3100 NOPs the platform-type branch, forcing
+PortMode8 / CurrentMode override1 (host). ConfigUsbEvent requests peripheral4
+but UsbStartController substitutes that host override; UsbfnDwc3 cannot bind.
+Sweet preparation now selects the original same-pin UsbConfigDxe.efi; its
+non-platform29/default path sets override4 (peripheral). Both input binaries
+are hash-guarded. No imported Redwood USB binary or new binary patch. Loader
+also reports init-event creation/signalling errors instead of hiding them.
+Firmware rebuild pending; no hardware validation or GPU rendering claim.

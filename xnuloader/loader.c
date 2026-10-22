@@ -3479,10 +3479,15 @@ usb_start(void)
 	void *event;
 
 	/* Ask the platform to bring the controller up in peripheral mode (as the stock fastboot does). */
-	if (!EFI_ERROR(BS->create_event_ex(0x200 /* EVT_NOTIFY_SIGNAL */, 8 /* TPL_CALLBACK */, usb_dummy_notify, NULL,
-	    &init_guid, &event))) {
-		BS->signal_event(event);
+	efi_status s = BS->create_event_ex(0x200 /* EVT_NOTIFY_SIGNAL */, 8 /* TPL_CALLBACK */, usb_dummy_notify, NULL,
+	    &init_guid, &event);
+	if (!EFI_ERROR(s)) {
+		s = BS->signal_event(event);
 		BS->close_event(event);
+	}
+	if (EFI_ERROR(s)) {
+		print("usb: peripheral init event failed %x\n", s);
+		return 0;
 	}
 	if (EFI_ERROR(BS->locate_protocol(&usb_guid, NULL, (void **)&USB))) {
 		print("usb: device protocol not found\n");
@@ -3496,7 +3501,7 @@ usb_start(void)
 	set.bos = usb_bos;
 	set.string_count = 5;
 	set.strings = strings;
-	efi_status s = USB->start_ex(&set);
+	s = USB->start_ex(&set);
 	if (EFI_ERROR(s)) {
 		print("usb: start failed %x\n", s);
 		return 0;
