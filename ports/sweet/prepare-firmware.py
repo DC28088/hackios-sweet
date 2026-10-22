@@ -2,7 +2,11 @@
 """Apply Sweet-only payload reservation and HackiOS handoff to pinned Mu source."""
 from pathlib import Path
 import sys
+import subprocess
 root=Path(sys.argv[1])
+# Split RAM bank registration around SEC/DXE's existing GCD reservations.
+# In particular, never re-add the fixed-address payload as conventional RAM.
+subprocess.run(['git', '-C', str(root), 'apply', str(Path(__file__).resolve().parent / 'patches/dynamic-ram-reservations.patch')], check=True)
 p=root/'Platforms/Xiaomi/sweetPkg/Library/DeviceMemoryMapLib/DeviceMemoryMapLib.c'
 s=p.read_text();anchor='  // Other Memory Regions'
 assert s.count(anchor)==1

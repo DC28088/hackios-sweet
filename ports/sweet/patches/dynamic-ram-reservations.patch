@@ -1,0 +1,171 @@
+--- a/Silicon/Qualcomm/QcomPkg/Drivers/DynamicRamDxe/DynamicRamDxe.c
++++ b/Silicon/Qualcomm/QcomPkg/Drivers/DynamicRamDxe/DynamicRamDxe.c
+@@ -12,7 +12,7 @@
+ 
+ BOOLEAN AnyRamPartitionAdded = FALSE;
+ 
+-VOID
++EFI_STATUS
+ AddRamPartition (
+   IN EFI_PHYSICAL_ADDRESS Base,
+   IN UINT64               Length,
+@@ -22,7 +22,7 @@
+   EFI_STATUS          Status;
+   EFI_GCD_MEMORY_TYPE EfiGcdMemoryType;
+ 
+-  if (Length <= 0) { return; }
++  if (Length == 0) { return EFI_SUCCESS; }
+ 
+   switch (EfiMemoryType) {
+     case EfiReservedMemoryType:
+@@ -42,26 +42,67 @@
+   Status = gDS->AddMemorySpace (EfiGcdMemoryType, Base, Length, 0xF);
+   if (EFI_ERROR (Status)) {
+     DEBUG ((EFI_D_ERROR, "Failed to Add Memory Space for 0x%08llx 0x%08llx! Status = %r\n", Base, Length, Status));
+-    return;
++    return Status;
+   }
+ 
+   // Set New Memory Attributes
+   Status = ArmSetMemoryAttributes (Base, Length, ArmAttributes, 0);
+   if (EFI_ERROR (Status)) {
+     DEBUG ((EFI_D_ERROR, "Failed to Set Memory Attributes for 0x%08llx 0x%08llx! Status = %r\n", Base, Length, Status));
+-    return;
++    return Status;
+   }
+ 
+   // Set Memory Space Attributes
+   Status = gDS->SetMemorySpaceAttributes (Base, Length, EFI_MEMORY_WB);
+   if (EFI_ERROR (Status)) {
+     DEBUG ((EFI_D_ERROR, "Failed to Set Memory Space Attributes for 0x%08llx 0x%08llx! Status = %r\n", Base, Length, Status));
+-    return;
++    return Status;
+   }
+ 
+   DEBUG ((EFI_D_WARN, "Successfully Added RAM Parition: 0x%08llx 0x%08llx\n", Base, Length));
+ 
+   AnyRamPartitionAdded = TRUE;
++  return EFI_SUCCESS;
++}
++
++// RAM tables describe banks; the GCD map also contains SEC/DXE reservations.
++// Register only gaps so the copied HackiOS payload remains reserved.
++STATIC
++EFI_STATUS
++AddUnclaimedRam (
++  IN EFI_PHYSICAL_ADDRESS Base,
++  IN UINT64               Length,
++  IN UINT64               ArmAttributes,
++  IN EFI_MEMORY_TYPE      EfiMemoryType)
++{
++  EFI_STATUS                      Status;
++  EFI_GCD_MEMORY_SPACE_DESCRIPTOR Descriptor;
++  UINT64                          Remaining;
++  UINT64                          Chunk;
++
++  Remaining = Length;
++  while (Remaining != 0) {
++    Status = gDS->GetMemorySpaceDescriptor (Base, &Descriptor);
++    if (EFI_ERROR (Status)) { return Status; }
++    if (Descriptor.BaseAddress > Base ||
++        Base - Descriptor.BaseAddress >= Descriptor.Length) {
++      return EFI_COMPROMISED_DATA;
++    }
++    // Subtraction avoids overflowing a descriptor whose end is UINT64_MAX+1.
++    Chunk = MIN (Remaining, Descriptor.Length - (Base - Descriptor.BaseAddress));
++    if (Descriptor.GcdMemoryType == EfiGcdMemoryTypeNonExistent) {
++      Status = AddRamPartition (Base, Chunk, ArmAttributes, EfiMemoryType);
++      if (EFI_ERROR (Status)) { return Status; }
++    } else if (Descriptor.GcdMemoryType == EfiGcdMemoryTypeSystemMemory) {
++      AnyRamPartitionAdded = TRUE;
++    } else {
++      DEBUG ((EFI_D_WARN, "Preserving GCD reservation: 0x%llx 0x%llx type %u\n",
++              Base, Chunk, (UINT32)Descriptor.GcdMemoryType));
++    }
++    Base += Chunk;
++    Remaining -= Chunk;
++  }
++  return EFI_SUCCESS;
+ }
+ 
+ INTN
+@@ -91,18 +132,21 @@
+   EFI_STATUS                       Status              = EFI_SUCCESS;
+   PARM_MEMORY_REGION_DESCRIPTOR_EX MemoryDescriptor    = gExtendedMemoryDescriptor;
+   RamPartitionTable               *RamPartitionTable   = NULL;
+-  UINTN                            Index               = 1;
+   UINT32                           NumPartitions       = 0;
+   UINT32                           PartitionVersion    = 0;
++
++  AnyRamPartitionAdded = FALSE;
+ 
+   // Get RAM Partition Infos
+   Status = GetRamPartitions (&RamPartitionTable, &PartitionVersion);
+   ASSERT_EFI_ERROR (Status);
++  if (EFI_ERROR (Status)) { return Status; }
+ 
+   // Print RAM Partition Version
+   if (PartitionVersion == 1) { 
+     DEBUG ((EFI_D_ERROR, "RAM Partition Version 1 is not Supported!\n"));
+     ASSERT_EFI_ERROR (EFI_UNSUPPORTED);
++    return EFI_UNSUPPORTED;
+   } else {
+     DEBUG ((EFI_D_WARN, "RAM Partition Version: %d\n", PartitionVersion));
+   }
+@@ -113,42 +157,27 @@
+   // Sort all RAM Partitions
+   PerformQuickSort (RamPartitionTable->RamPartitionEntry, NumPartitions, sizeof(RamPartitionEntry), CompareBaseAddress);
+ 
+-  for (INT32 i = 0; i < NumPartitions; i++) {
+-    // Check if the RAM Partition is Invalid
+-    if (RamPartitionTable->RamPartitionEntry[i].Type != RAM_PART_SYS_MEMORY || RamPartitionTable->RamPartitionEntry[i].Category != RAM_PART_SDRAM) { continue; }
+-    if (RamPartitionTable->RamPartitionEntry[i].Base + RamPartitionTable->RamPartitionEntry[i].AvailableLength <= RAM_PARTITION_BASE) { continue; }
++  for (UINT32 i = 0; i < NumPartitions; i++) {
++    RamPartitionEntry *Part = &RamPartitionTable->RamPartitionEntry[i];
++    UINT64 Start;
++    UINT64 End;
+ 
+-    // Add First RAM Partition
+-    if (!AnyRamPartitionAdded) {
+-      MemoryDescriptor[0].Address = RAM_PARTITION_BASE;
+-      MemoryDescriptor[0].Length  = RamPartitionTable->RamPartitionEntry[i].AvailableLength - RAM_PARTITION_BASE + RamPartitionTable->RamPartitionEntry[i].Base;
++    if (Part->Type != RAM_PART_SYS_MEMORY || Part->Category != RAM_PART_SDRAM) { continue; }
++    if (Part->Base > MAX_UINT64 - Part->AvailableLength) { return EFI_COMPROMISED_DATA; }
++    Start = MAX (Part->Base, RAM_PARTITION_BASE);
++    End = Part->Base + Part->AvailableLength;
++    if (End <= Start) { continue; }
+ 
+-      // Add New RAM Partition
+-      AddRamPartition (MemoryDescriptor[0].Address, MemoryDescriptor[0].Length, MemoryDescriptor[0].ArmAttributes, MemoryDescriptor[0].MemoryType);
+-      continue;
+-    }
+-
+-    // Refresh Variables
+-    MemoryDescriptor[Index].Address = RamPartitionTable->RamPartitionEntry[i].Base;
+-    MemoryDescriptor[Index].Length  = RamPartitionTable->RamPartitionEntry[i].AvailableLength;
+-    Index++;
+-  }
+-
+-  Index = 1;
+-
+-  // Add the Rest of RAM Partitions
+-  while (MemoryDescriptor[Index].Length != 0) {
+-    ASSERT (Index < MAX_ARM_MEMORY_REGION_DESCRIPTOR_COUNT);
+-
+-    // Add New RAM Partition
+-    AddRamPartition (MemoryDescriptor[Index].Address, MemoryDescriptor[Index].Length, MemoryDescriptor[Index].ArmAttributes, MemoryDescriptor[Index].MemoryType);
+-
+-    Index++;
++    Status = AddUnclaimedRam (Start, End - Start, MemoryDescriptor[0].ArmAttributes,
++                             MemoryDescriptor[0].MemoryType);
++    ASSERT_EFI_ERROR (Status);
++    if (EFI_ERROR (Status)) { return Status; }
+   }
+ 
+   if (!AnyRamPartitionAdded) {
+     DEBUG ((EFI_D_ERROR, "No RAM Partitions were Added! Stoping UEFI now.\n"));
+     ASSERT_EFI_ERROR (EFI_NOT_READY);
++    return EFI_NOT_READY;
+   }
+ 
+   return EFI_SUCCESS;

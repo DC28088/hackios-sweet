@@ -1,5 +1,20 @@
 # HackiOS Sweet handoff
 
+## UEFI boot failure correction (2026-10-22)
+
+User photo shows old boot14ab4eb6 stopping in DynamicRamDxe.c:151:
+AddMemorySpace(A2370000,5DC90000) and then (A2370000,15DC90000) return
+Access Denied, followed by EFI_NOT_READY. XNU has not started. The added
+F0000000..F4000000 payload reservation intersects the first dynamic RAM bank.
+Original DynamicRamDxe adds the whole bank without excluding GCD reservations;
+after that failure it incorrectly treats the next bank as another first bank.
+
+Added Sweet firmware patch to walk GCD descriptors, register only unclaimed
+RAM, preserve reserved/MMIO regions including the payload, and process each
+SMEM bank independently. Registration/attribute errors propagate rather than
+being hidden. Building corrected UEFI next; no hardware result yet. Kernel,
+GLES and verified APFS images are unchanged. No tests or device commands.
+
 ## APFS root prepared (2026-10-22)
 
 iOS16.5/20F66 system and helper images are built and verified locally:
