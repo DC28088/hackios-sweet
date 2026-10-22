@@ -1,10 +1,15 @@
 name: HackiOS Sweet
 on:
   workflow_dispatch:
+    inputs:
+      firmware_only:
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
   kernel:
+    if: ${{ !inputs.firmware_only }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -68,3 +73,14 @@ jobs:
         with:
           name: hackios-sweet-firmware
           path: out/firmware/
+      - name: Save firmware diagnostics
+        if: failure()
+        run: |
+          mkdir -p out/diagnostics
+          cp xnuloader/loader.s out/diagnostics/ 2>/dev/null || true
+          cp uefi-sweet/Build/BUILDLOG* out/diagnostics/ 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: hackios-sweet-firmware-diagnostics
+          path: out/diagnostics/
