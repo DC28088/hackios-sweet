@@ -220,3 +220,13 @@ so keep the matching16.5 injection addresses. Topaz WLAN0123 maps CE under
 0x0c800000 with stream0x1a0; Sweet public DTS has ICNSS0x18800000 and stream
 0x240, SMEM0x86000000. Its modem/transport code needs a Sweet hardware port;
 do not enable the Redwood ath11k path or copy Topaz addresses blindly.
+
+Build milestone: firmware/loader39825784943 SUCCESS (source d913d0b),
+A618 UBWC parameter kernel39826212188 SUCCESS (3648248), combined boot image
+39826923724 SUCCESS. Downloaded firmware/loader hashes verified; canonical
+out/firmware and out/loader updated with backups before-usbfix-39825784943.
+Canonical out/kernel updated after SHA256 verification; previous kernel in
+out/kernel-before-bankbit-39826212188. New kernel SHA256:
+0cd4677d830d6add40465d302171c15e1c882c4dce2057d0c5fd125c5696e4a8.
+xnu-usb.img regenerated from corrected firmware and loader. APFS images kept.
+No device access, tests, partition writes or hardware rendering verification.
