@@ -254,3 +254,11 @@ exceptions, holds exception text60s using architectural counter before its
 reset. Existing hardware watchdog may still reset earlier. Added loader_only
 CI input to compile this without rebuilding unchanged kernel/firmware.
 No device writes/boots performed; this is diagnostic instrumentation.
+
+Diagnostic loader CI39829205280 SUCCESS (320a663), artifact checksum verified;
+installed in out/loader with previous copy in
+out/loader-before-handoff-39829205280. Regenerated xnu-usb.img and local
+out/hackios-sweet-handoff.img using unchanged UBWC-corrected kernel and
+USB-peripheral firmware. Package CI39829459841 dispatched for same components.
+Next manual boot uses same bootcpu=7 command; obtain photo of last visible
+loader/exception lines if it resets before USB polling resumes. No flashing.
