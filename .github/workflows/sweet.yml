@@ -47,8 +47,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential uuid-dev nasm acpica-tools gcc-aarch64-linux-gnu clang llvm lld mono-devel nuget python3-venv python3-distutils gettext
+          sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update
+          sudo env DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y build-essential uuid-dev nasm acpica-tools gcc-aarch64-linux-gnu clang llvm lld mono-devel nuget python3-venv python3-distutils gettext
       - name: Compile Sweet loader and firmware
         run: |
           xnuloader/build.sh
