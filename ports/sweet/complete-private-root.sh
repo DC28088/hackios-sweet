@@ -5,6 +5,14 @@ cd "$(dirname "$0")/../.."
 base=$(realpath "${1:?usage: bash ports/sweet/complete-private-root.sh PRIVATE_ARTIFACT_DIR}")
 (cd "$base" && sha256sum -c SHA256SUMS)
 cmp upstream-lock.json "$base/upstream-lock.json"
+python3 - "$base/SystemVersion.plist" <<'PY'
+import plistlib, sys
+with open(sys.argv[1], 'rb') as f:
+    version = plistlib.load(f)
+if version.get('ProductVersion') != '16.5' or version.get('ProductBuildVersion') != '20F66':
+    raise SystemExit(f'Unexpected iOS version: {version}')
+print('Apple system version: iOS16.5 / 20F66')
+PY
 [ ! -e userland/root ] || { echo 'userland/root already exists; preserve or move it before importing' >&2; exit 1; }
 staging=$(mktemp -d "$PWD/out/root-import.XXXXXX")
 tar --no-same-owner -xzf "$base/root-stage.tar.gz" -C "$staging"

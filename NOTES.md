@@ -9,7 +9,10 @@ delivery was only~300KiB/s total; completed1MiB ranges are retained in
 ios165/rootfs.dmg.part.ranges, with the local fetch paused.
 
 Created PRIVATE DC28088/hackios-sweet-root-build for APFS preparation only.
-Run39777162503 is assembling iOS16.5 from public source96a1f12 and exact GLES
+Run39777162503 fetched all three Apple components with ZIP CRC-32 verification
+and extracted them, then stopped because prebuilt/userland has no optional
+drawable_test executable. Fixed that copy requirement in public source8c9682a.
+Retry39778207769 is assembling from that pin and exact GLES
 run39772020663 libraries. Only workflow/source pointers and compiled GLES
 inputs are in its Git tree. Apple files stay in private Actions artifacts;
 no vendor firmware/device dump was uploaded. Final helper must be rebuilt
