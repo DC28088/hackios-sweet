@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Package compiled Sweet UEFI + resident HackiOS loader; never runs device commands."""
 from pathlib import Path
-import argparse,gzip,struct,hashlib,json
+import argparse,gzip,struct,hashlib,json,os,tempfile
 p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('--firmware',required=True,type=Path)
 p.add_argument('--loader',required=True,type=Path)
@@ -49,7 +49,15 @@ struct.pack_into('<IQI',header,1632,0,0,1648)
 id=hashlib.sha1(kernel+struct.pack('<I',len(kernel))+struct.pack('<I',0)+struct.pack('<I',0)).digest()
 header[576:608]=id+bytes(12)
 a.out.parent.mkdir(parents=True,exist_ok=True)
-with a.out.open('xb') as f:f.write(header);f.write(kernel);f.write(bytes(-len(kernel)%page))
+# xl enter rebuilds the same generated filename on every session. Replace it
+# only after a complete image has been written beside it.
+temporary = None
+try:
+ with tempfile.NamedTemporaryFile(dir=a.out.parent,prefix=a.out.name+'.',suffix='.partial',delete=False) as f:
+  temporary=Path(f.name);f.write(header);f.write(kernel);f.write(bytes(-len(kernel)%page))
+ os.replace(temporary,a.out)
+finally:
+ if temporary is not None:temporary.unlink(missing_ok=True)
 report={'device':'sweet','mode':'resident HackiOS USB loader','ios_userland_required':'iOS16.5 APFS system and helper images; prepared separately','hardware_booted':False,'embedded_dtb_board_id':[46,0],'embedded_dtb_sha256':hashlib.sha256(dtb).hexdigest(),'gpu_rendering_verified':False,'files':{}}
 for name,path in {'boot':a.out,'uefi':fw/'SWEET_UEFI.fd','shim':fw/'BootShim.bin','dtb':fw/'sweet.dtb','loader':a.loader,**({'kernel':a.kernel} if a.kernel else {})}.items():
  report['files'][name]={'path':str(path),'bytes':path.stat().st_size,'sha256':hashlib.sha256(path.read_bytes()).hexdigest()}
