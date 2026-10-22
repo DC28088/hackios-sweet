@@ -96,6 +96,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Compile Sweet EFI loader
         run: |
+          sudo apt-get update
+          sudo apt-get install -y lld
           xnuloader/build.sh
           mkdir -p out/loader
           cp xnuloader/loader.efi out/loader/
