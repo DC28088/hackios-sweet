@@ -55,3 +55,9 @@ New strict Sweet packager ports/sweet/package.py validates Sweet FD size,
 ARM64 BootShim/PE, DTB magic; no fallback to upstream Redwood prebuilt pieces.
 Loader in USB mode now refuses rootless one-shot boot if USB setup fails.
 No device commands performed. Firmware39772464704 still installing dependencies.
+
+Runtime scripts adapted for the combined repository: common/setup.sh no longer
+creates a second userland checkout over tracked files; xl requires out/loader
+and out/kernel Sweet artifacts and defaults to Sweet bootargs. No Redwood
+prebuilt fallback. Root preparation still needed for iOS16.5; host free space
+~4.8GiB is below upstream extraction's ~8GB requirement, so no download begun.

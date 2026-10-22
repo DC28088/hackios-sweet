@@ -44,11 +44,11 @@
 # when the last upload was not from this copy. The record starts empty -- an upload by a copy without
 # this change leaves none -- and `run` says so rather than assuming.
 cd "$(dirname "$(readlink -f "$0")")" || exit 1
-# the kernel and the loader built here, or else the ones that come with the repository
-K=xnu-src/xnu-8796.121.2/BUILD/obj/DEVELOPMENT_ARM64_BCM2837/mach.development.bcm2837
-[ -f $K ] || K=prebuilt/mach.development.bcm2837
-L=xnuloader/loader.efi
-[ -f $L ] || L=prebuilt/loader.efi
+# This repository targets Sweet; never fall back to Redwood prebuilt artifacts.
+export UEFI_TARGET=${UEFI_TARGET:-sweet}
+K=out/kernel/mach.development.bcm2837
+L=out/loader/loader.efi
+[ -f "$L" ] || { echo "xl: download/build the Sweet loader into out/loader first"; exit 1; }
 mkdir -p logs
 # There is one phone, whichever working copy (tools/new-workspace.sh) talks to it: the locks are
 # outside all of them.
@@ -136,7 +136,7 @@ run() { # run <oem command> <label>
 		fi
 		# A run about Wi-Fi is given the radio's own address, which is this phone's and so is kept in a
 		# file that is not in the repository: fw-wifi/mac, one line, six bytes in hexadecimal with colons.
-		local args=${XL_CMDLINE--v}
+		local args=${XL_CMDLINE-"-v sweet=1 cpus=8 sweettouch=1 sweetkeys=1 gpu=1"}
 		case " $args " in
 		*" wifi="*|*" wifi_step="*) [ -s fw-wifi/mac ] && args="$args wifi_mac=$(tr -d ' \n\r' < fw-wifi/mac)" ;;
 		esac

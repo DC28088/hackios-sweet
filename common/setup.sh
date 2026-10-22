@@ -21,6 +21,11 @@
 set -e
 cd "$(dirname "$(readlink -f "$0")")/.."
 ROOT=$PWD
+if [ -f upstream-lock.json ] && [ -d userland/src ]; then
+ echo "setup: pinned HackiOS userland is already integrated in this Sweet repository"
+ echo "Use the Sweet Actions workflows; no second checkout is required."
+ exit 0
+fi
 URL=${USERLAND_URL:-https://github.com/oosexgang/hackios-xnu-userland.git}
 REF=${USERLAND_REF:-main}
 UG=(git --git-dir="$ROOT/.userland.git" --work-tree="$ROOT")
