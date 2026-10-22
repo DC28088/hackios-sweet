@@ -141,10 +141,21 @@ run() { # run <oem command> <label>
 		*" wifi="*|*" wifi_step="*) [ -s fw-wifi/mac ] && args="$args wifi_mac=$(tr -d ' \n\r' < fw-wifi/mac)" ;;
 		esac
 		xnuloader/mkpayload.py -o run-payload.bin kernel=$K ${rd:+ramdisk=$rd} --cmdline "loader_return_after=${XL_SECS:-8} epoch=$(date +%s) sb_delay=${XL_SB_DELAY:-8} $args" >/dev/null || return 1
-		FB_TIMEOUT=30 fb stage run-payload.bin | grep -q OKAY || { echo "xl: upload failed"; return 1; }
+		echo "xl: staging kernel and helper ($(stat -c %s run-payload.bin) bytes)"
+		FB_TIMEOUT=30 fb stage run-payload.bin | tee "$log.stage" | grep -q OKAY || { echo "xl: upload failed; see $log.stage"; return 1; }
+	fi
+	# Preserve the loader's state before run_kernel clears its log. Neither
+	# failure here nor an absent staged log should hide the launch response.
+	if fb oem log > "$log.preflight-command"; then
+		fetch_log "$log.preflight" || true
 	fi
 	local live=; live_loader && live=1
-	fb $1 >/dev/null
+	echo "xl: starting kernel; result/log files: $log*"
+	if ! fb $1 > "$log.start"; then
+		cat "$log.start"
+		echo "xl: loader did not acknowledge the launch; see $log.start"
+		return 1
+	fi
 	if [ -n "$live" ] && [ "$1" != "oem selftest" ]; then
 		# the loader goes on answering: ask every two seconds until the result is no longer "running".
 		# XL_FOLLOW=N: fetch the log as it stands every N seconds as well, so that a phone that

@@ -20,6 +20,11 @@ qemu)
 	;;
 phone)
 	command -v fastboot >/dev/null || die "fastboot is not installed"
+	SESSION_LOG="logs/session-$(date +%Y%m%d-%H%M%S).log"
+	exec > >(tee -a "$SESSION_LOG") 2>&1
+	echo "run.sh: host transcript: $SESSION_LOG"
+	# Save snapshots while the loader remains on its own core (bootcpu=N).
+	export XL_FOLLOW=${XL_FOLLOW:-5}
 	export UEFI_TARGET FD_BASE FD_SIZE PAYLOAD_BASE UEFI_FD DTB
 	./xl enter || die "could not get the phone into the loader (USB? unlocked bootloader?)"
 	./xl ramdisk userland/system.apfs || die "system image upload failed"

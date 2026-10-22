@@ -230,3 +230,15 @@ out/kernel-before-bankbit-39826212188. New kernel SHA256:
 0cd4677d830d6add40465d302171c15e1c882c4dce2057d0c5fd125c5696e4a8.
 xnu-usb.img regenerated from corrected firmware and loader. APFS images kept.
 No device access, tests, partition writes or hardware rendering verification.
+
+User boot observation after39826923724: USB loader enumerated and host reported
+2376MB system upload in93s/25MB/s, followed by reset into Android after another
+2–3 minutes (not the900s session expiry). logs/ is empty; no saved kernel trace
+supports a specific panic, watchdog or GPU diagnosis. wdt_arm currently only
+arms the Redwood platform, so do not label this reset our Haven watchdog.
+Default bootcpu is the loader's current core: live USB requests cannot be
+served while XNU owns it. Next diagnostic should use bootcpu=7 so the loader
+stays on the original core. common/run.sh now records a host transcript and
+defaults XL_FOLLOW=5. xl saves staging responses, a preflight loader log, and
+the launch response, and rejects a failed launch acknowledgment. No device
+commands or tests run; this host-script change needs no new kernel build.
