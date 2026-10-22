@@ -28,7 +28,8 @@ for name in ('a618_gmu.bin', 'a630_sqe.fw', 'a615_zap.mdt', 'a615_zap.b02'):
         raise SystemExit(f'Private firmware checksum mismatch: {name}')
     (dest/name).write_bytes(data)
 available = shutil.disk_usage(root).free / (1024**3)
-if available < 12 and not (root/'ios165/.done-cryptex').exists():
+allocated = sum(p.stat().st_blocks*512 for p in (root/'ios165').rglob('*') if p.is_file()) / (1024**3)
+if available + allocated < 12 and not (root/'ios165/.done-cryptex').exists():
     raise SystemExit(f'Root preparation needs 12 GiB free; available: {available:.1f} GiB. Firmware and GLES verified.')
 print(f'GLES and Sweet firmware verified; {available:.1f} GiB free', flush=True)
 PY
@@ -36,7 +37,7 @@ bash ios165/fetch.sh
 # Do not inherit optional experiments, credentials or device-flash modes.
 env -u CHECK -u FLASHBOOT -u CRYPTEXES -u ADSP -u METAL -u AIR -u STOREFRONT \
     -u JB -u JOBS -u INJECT -u RC -u RC_JOBS -u EXTRA_SHARE -u QUIET \
-    PREBUILT=1 GL=1 REST=1 SHARE=1 WIFID=0 GLES_PREBUILT_DIR="$GLES_DIR" \
+    PREBUILT=1 GL=1 REST=1 SHARE=1 WIFID=0 APFS_JOBS="${APFS_JOBS:-2}" GLES_PREBUILT_DIR="$GLES_DIR" \
     bash userland/build.sh
 python3 - <<'PY'
 import hashlib, json, pathlib, struct

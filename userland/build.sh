@@ -74,7 +74,7 @@
 #   CHECK=1          check every image (every container) as it is made: apfsck has to find it clean and
 #                    the kernel's apfs_lib has to read every volume back as the directory it was made of
 #                    (../tools/apfs/check-image.sh; the system image takes a few minutes more)
-set -e
+set -eo pipefail
 cd "$(dirname "$(readlink -f "$0")")"
 source ../xnu-env.sh
 

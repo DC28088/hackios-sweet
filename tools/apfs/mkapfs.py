@@ -23,6 +23,7 @@ taken from linux-apfs/apfsprogs' mkapfs (and checked with its apfsck, which has 
 image clean: tools/apfs/check-image.sh).  Hard links are not made: a name is a file.
 """
 import argparse
+from collections import deque
 import concurrent.futures
 import hashlib
 import os
@@ -331,10 +332,24 @@ class Volume:
             node.size = os.path.getsize(node.source)
         forks = iter(())
         if self.compress:
-            # compressed by as many processes as there are processors, taken in the files' order
-            pool = concurrent.futures.ProcessPoolExecutor()
-            forks = pool.map(compressed_fork, [n.source for n in files if n.size > 0 and not self.is_plain(n)],
-                             chunksize=16)
+            # Limit queued large cache files as well as workers: otherwise completed
+            # resource forks can accumulate in RAM while an earlier file compresses.
+            workers = int(os.environ.get('APFS_JOBS', str(min(4, os.cpu_count() or 1))))
+            if workers < 1:
+                raise ValueError('APFS_JOBS must be positive')
+            pool = concurrent.futures.ProcessPoolExecutor(max_workers=workers)
+            sources = iter(n.source for n in files if n.size > 0 and not self.is_plain(n))
+
+            def bounded_forks():
+                pending = deque(pool.submit(compressed_fork, source)
+                                for source in (next(sources, None) for _ in range(workers)) if source is not None)
+                while pending:
+                    yield pending.popleft().result()
+                    source = next(sources, None)
+                    if source is not None:
+                        pending.append(pool.submit(compressed_fork, source))
+
+            forks = bounded_forks()
         for node in files:
             if node.size == 0:
                 continue
