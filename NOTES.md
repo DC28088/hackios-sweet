@@ -1,5 +1,34 @@
 # HackiOS Sweet handoff
 
+## Built image (read first, 2026-10-22)
+
+- **Final kernel/loader CI39773636216 SUCCESS**, source659167c3c90ed64f6db6ec24adacb6886b12babd.
+  Kernel out/kernel/mach.development.bcm2837,15179440bytes,
+  SHA25677b897c58d441944b6956413391ec439caac3ba114fe3ba437980f6e6fae0c40.
+- Sweet firmware job CI39773154339 SUCCESS on3febfc8. The run as a whole
+  had a standalone-loader missing-linker failure, fixed in later loader CI.
+- GLES CI39772020663 SUCCESS on2048b0f. Local out/gles-39772020663 contains
+  libOSMesa/EAGL/backboardd/SpringBoard dylibs, checksum/ARM64 validated.
+- **Package CI39774118533 SUCCESS**, sourcec9be3d8. Downloadable artifact:
+  https://github.com/DC28088/hackios-sweet/actions/runs/39774118533/artifacts/12423103290
+- Final image: /home/dan/hackios-sweet/out/boot-39774118533/hackios-sweet-boot.img,
+  7833600bytes, SHA25614ab4eb6d16d503eabe3a67d037f24b83d3b6bc7b8a81d6c1dff176c74d83072.
+  Local SHA256, Android v1 header/page2048, exact shim/UEFI/loader/kernel
+  payload and USB mode checked; embedded DTB hash matches manifest and its
+  board identity is[46,0]. Decompressed local repack matches every byte;
+  compressed bytes differ across host zlib versions. Header OS byte now
+  explicitly pinned in packager, but cross-zlib byte reproducibility is not
+  claimed. Compiler output has only upstream documented export-list failures
+  after link; no source compilation errors were found in the initial log.
+- **No phone command, hardware boot, runtime test, flash or userdata write.**
+  Hardware behavior and GPU/UI acceleration remain unverified. Image starts
+  resident USB loader, carrying compiled XNU; iOS16.5 APFS system/helper
+  images must be prepared/uploaded separately. Existing16.7.16 HFS+ root is
+  incompatible and preserved. Host lacks the ~8GB extraction space, so no
+  Apple download/root preparation began. Vendor firmware remains private in
+  original repo research/gpu/device-firmware. See ports/sweet/README.md.
+
+
 2026-10-22: user changed direction after reporting Sweet0116 booted with zero
 performance improvement. Requests a new repository porting HackiOS to Sweet
 and a compiled boot image. Repository: https://github.com/DC28088/hackios-sweet.

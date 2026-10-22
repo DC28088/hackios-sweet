@@ -4,8 +4,9 @@ Experimental port of [HackiOS kernel](https://github.com/oosexgang/hackios-xnu-k
 and [HackiOS userspace](https://github.com/oosexgang/hackios-xnu-userland) to
 SM7150 / Adreno618. Source pins: [upstream-lock.json](upstream-lock.json).
 
-**Status:** source adaptation and compilation in progress. No Sweet boot or
-GPU rendering has been established. The functionality described in the
+**Status:** experimental kernel, firmware, loader and GLES userspace compiled.
+[Boot image build](https://github.com/DC28088/hackios-sweet/actions/runs/39774118533).
+No Sweet boot or GPU rendering has been established. The functionality described in the
 upstream README below belongs to Redwood and is not a claim about Sweet.
 
 This uses HackiOS's iOS16.5 APFS architecture. The prior ios-sweet16.7.16 HFS+

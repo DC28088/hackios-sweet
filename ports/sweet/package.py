@@ -38,7 +38,10 @@ for name,data in items.items():
  body.extend(struct.pack('<16sII',name.encode(),len(data),0));body.extend(data);body.extend(bytes(-len(data)%16))
 body.extend(bytes(24));payload=struct.pack('<II',0x50554e58,len(body))+body
 assert len(payload)<0x03fff000
-kernel=gzip.compress(shim+fd+payload+bytes(-(len(shim)+len(fd)+len(payload))%16),compresslevel=6,mtime=0)+dtb
+compressed=bytearray(gzip.compress(shim+fd+payload+bytes(-(len(shim)+len(fd)+len(payload))%16),compresslevel=6,mtime=0))
+# Python3.12 sets OS=Unix, 3.13+ sets OS=unknown. Pin the header across hosts.
+compressed[9]=3
+kernel=bytes(compressed)+dtb
 base=a.template.read_bytes();assert base[:8]==b'ANDROID!' and struct.unpack_from('<I',base,40)[0]==1
 page=struct.unpack_from('<I',base,36)[0];header=bytearray(base[:page]);assert page>=1648
 struct.pack_into('<I',header,8,len(kernel));struct.pack_into('<I',header,16,0);struct.pack_into('<I',header,24,0)
