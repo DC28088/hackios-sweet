@@ -22,8 +22,8 @@ phone)
 	command -v fastboot >/dev/null || die "fastboot is not installed"
 	export UEFI_TARGET FD_BASE FD_SIZE PAYLOAD_BASE UEFI_FD DTB
 	./xl enter || die "could not get the phone into the loader (USB? unlocked bootloader?)"
-	./xl ramdisk userland/system.apfs
-	XL_SECS=$SECS XL_CMDLINE="${XL_CMDLINE:-$BOOTARGS}" ./xl run
+	./xl ramdisk userland/system.apfs || die "system image upload failed"
+	XL_SECS=$SECS XL_CMDLINE="${XL_CMDLINE:-$BOOTARGS}" ./xl run || die "kernel session failed; inspect logs/"
 	echo "run: './xl screenshot shot.png' for the screen, './xl reboot' to go back to Android"
 	;;
 *) die "unknown KIND=$KIND in common/devices/$DEVICE.conf" ;;

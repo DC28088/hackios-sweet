@@ -13,7 +13,7 @@ or, when there is none, from prebuilt/uefi/.
 usage: mkxnuimg.py [-p payload.bin] [-o out.img]
 
 Another device (common/devices/<name>.conf, read by common/build.sh) sets these in the environment:
-  UEFI_TARGET   Mu-Silicium device name (default redwood)    UEFI_FD, DTB   files to use instead
+  UEFI_TARGET   Mu-Silicium device name (default sweet)      UEFI_FD, DTB   files to use instead
   FD_BASE, FD_SIZE, PAYLOAD_BASE                              addresses from its UEFI port's memory map
 """
 import argparse, gzip, os, subprocess, sys
@@ -24,13 +24,13 @@ PREBUILT = os.path.join(HERE, 'prebuilt', 'uefi')
 def env_int(name, default):
     v = os.environ.get(name, '')
     return int(v, 0) if v else default
-TARGET = os.environ.get('UEFI_TARGET') or 'redwood'
+TARGET = os.environ.get('UEFI_TARGET') or 'sweet'
 FD_BASE, FD_SIZE = env_int('FD_BASE', 0x9FD00000), env_int('FD_SIZE', 0x200000)
 PAYLOAD_BASE, PAYLOAD_MAX = env_int('PAYLOAD_BASE', 0xF0000000), 0x04000000
 
 ap = argparse.ArgumentParser()
 ap.add_argument('-p', '--payload')
-ap.add_argument('-o', '--output', default=os.path.join(HERE, 'xnu-redwood.img'))
+ap.add_argument('-o', '--output', default=os.path.join(HERE, f'xnu-{TARGET}.img'))
 ap.add_argument('--mode', default='RELEASE')
 args = ap.parse_args()
 

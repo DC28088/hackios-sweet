@@ -2,6 +2,29 @@
 
 ## UEFI boot failure correction (2026-10-22)
 
+**Corrected firmware and boot image built successfully.** Firmware/loader
+CI39821747578 on bb39a7e SUCCESS; package CI39822553764 SUCCESS. New image:
+`out/boot-ramfix-39822553764/hackios-sweet-boot.img`, 7,833,600 bytes,
+SHA256 `cd33fa30aba36911580fd9a0bcd4ced6f23a44e4928de3b4987f16a1ad3e8744`.
+Embedded firmware SHA256
+`c23089d46e15264dd418a30f6d445d90d331c2e0a27417a2545580876e1a5f8f`.
+Android header, DTB magic, firmware, loader, USB flag and original XNU payload
+checked against the component manifest. Kernel+helper is about20MiB (<64MiB).
+
+Updated canonical out/firmware and out/loader to the verified new artifacts;
+previous files saved as out/firmware-before-ramfix-39821747578 and
+out/loader-before-ramfix-39821747578. Regenerated xnu-usb.img with corrected
+Sweet firmware. mkxnuimg.py now defaults to Sweet so manual calls cannot
+silently choose Redwood firmware. common/run.sh stops if system upload fails.
+Both prepared APFS hashes were rechecked and match. No phone commands or
+hardware boot were performed; no GPU rendering result is established yet.
+
+Next: phone on FASTBOOT, run `bash common/run.sh sweet 900` from this repo.
+It temporarily starts the loader, uploads system.apfs into RAM, then runs
+the compiled kernel with root.apfs as its helper. Do not flash userdata for
+this attempt. First CI39820327732 was cancelled after its Azure Ubuntu
+package downloads stalled; fresh runner39821747578 completed normally.
+
 User photo shows old boot14ab4eb6 stopping in DynamicRamDxe.c:151:
 AddMemorySpace(A2370000,5DC90000) and a larger request from the same base
 return Access Denied, followed by EFI_NOT_READY. XNU has not started. The added
