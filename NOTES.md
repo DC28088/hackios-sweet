@@ -77,3 +77,10 @@ Artifacts downloading: firmware out/firmware and initial kernel
 out/kernel-initial-3febfc8. Loader already in out/loader. Userland in
 out/gles-39772020663. Package workflow added to produce downloadable boot image
 from explicit component run IDs. No tests or device access.
+
+Firmware39773154339 has downloaded and hashes match all components. Template
+Android header v1/page2048 and192-byte ARM64 shim checked. Loader39773276597
+is72KiB ARM64 PE. Final kernel39773636216 and loader job still awaiting
+kernel completion; loader job already SUCCESS. Packaging now patches only
+qcom,board-id to measured Sweetin[46,0] and records embedded DTB hash; no live
+FDT dump is copied. See ports/sweet/README.md for exact scope and root layout.

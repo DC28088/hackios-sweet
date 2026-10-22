@@ -9,8 +9,8 @@ GPU rendering has been established. The functionality described in the
 upstream README below belongs to Redwood and is not a claim about Sweet.
 
 This uses HackiOS's iOS16.5 APFS architecture. The prior ios-sweet16.7.16 HFS+
-root is incompatible and remains preserved. Build artifacts and installation
-instructions will be recorded in NOTES.md. No phone is flashed by CI.
+root is incompatible and remains preserved. Build artifacts are recorded in NOTES.md; see
+[Sweet build and boot layout](ports/sweet/README.md). No phone is flashed by CI.
 
 ---
 
