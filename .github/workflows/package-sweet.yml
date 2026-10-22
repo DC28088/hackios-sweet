@@ -1,0 +1,47 @@
+name: Package HackiOS Sweet image
+on:
+  workflow_dispatch:
+    inputs:
+      kernel_run:
+        required: true
+      firmware_run:
+        required: true
+        default: '39773154339'
+      loader_run:
+        required: true
+permissions:
+  contents: read
+  actions: read
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch compiled components
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KERNEL_RUN: ${{ inputs.kernel_run }}
+          FIRMWARE_RUN: ${{ inputs.firmware_run }}
+          LOADER_RUN: ${{ inputs.loader_run }}
+        run: |
+          gh run download "$KERNEL_RUN" -R "$GITHUB_REPOSITORY" -n hackios-sweet-kernel -D out/kernel
+          gh run download "$FIRMWARE_RUN" -R "$GITHUB_REPOSITORY" -n hackios-sweet-firmware -D out/firmware
+          gh run download "$LOADER_RUN" -R "$GITHUB_REPOSITORY" -n hackios-sweet-loader -D out/loader
+          (cd out/firmware && sha256sum -c SHA256SUMS)
+          (cd out/loader && sha256sum -c SHA256SUMS)
+          for run in "$KERNEL_RUN" "$FIRMWARE_RUN" "$LOADER_RUN"; do
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run" --jq '{id,head_sha,status,conclusion}'
+          done > out/component-builds.jsonl
+      - name: Package resident USB loader and XNU
+        run: |
+          python3 ports/sweet/package.py --firmware out/firmware --loader out/loader/loader.efi --kernel out/kernel/mach.development.bcm2837 --template out/firmware/template.img --out out/hackios-sweet-boot.img
+          cp out/component-builds.jsonl out/hackios-sweet-builds.jsonl
+          (cd out && sha256sum hackios-sweet-boot.img > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hackios-sweet-boot
+          path: |
+            out/hackios-sweet-boot.img
+            out/hackios-sweet-boot.json
+            out/hackios-sweet-builds.jsonl
+            out/SHA256SUMS

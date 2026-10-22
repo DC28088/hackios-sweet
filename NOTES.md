@@ -68,3 +68,12 @@ it, reads invalidate/acquire the dedicated scratch line, submit reserves3
 extra words. Core GPU_SET OOB uses legacy request16/ack24, and shutdown uses
 legacy BOOT_SLUMBER request22/ack30, not the uninitialized modern HFI table.
 Latest kernel build is required; earlier source artifacts are superseded.
+
+CI39773154339: kernel and firmware jobs both SUCCESS. Overall run failed only
+because the separate loader job lacked lld-link; that was corrected and loader
+CI39773276597 onaca7259 SUCCEEDED. Final A618 SQE/cleanup kernel source659167c
+build39773636216 is running; it supersedes the earlier compiled kernel.
+Artifacts downloading: firmware out/firmware and initial kernel
+out/kernel-initial-3febfc8. Loader already in out/loader. Userland in
+out/gles-39772020663. Package workflow added to produce downloadable boot image
+from explicit component run IDs. No tests or device access.
