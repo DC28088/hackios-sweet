@@ -2472,11 +2472,19 @@ extern char __ImageBase;
 static void EFIAPI
 exception_handler(int64_t type, uint64_t *ctx)
 {
+	/* USB mode normally mutes ConOut. A fault before the command loop resumes
+	 * cannot be fetched by the host, so make the report visible before reset. */
+	screen_quiet = 0;
 	print("\nUEFI EXCEPTION type=%d elr=%x esr=%x far=%x lr=%x sp=%x spsr=%x\n", (uint64_t)type, ctx[EXC_CTX_ELR],
 	    ctx[EXC_CTX_ESR], ctx[EXC_CTX_FAR], ctx[EXC_CTX_LR], ctx[EXC_CTX_SP], ctx[EXC_CTX_SPSR]);
 	print("loader image base %x (elr offset %x)\n", (uint64_t)(uintptr_t)&__ImageBase,
 	    ctx[EXC_CTX_ELR] - (uint64_t)(uintptr_t)&__ImageBase);
 	flush_log();
+	print("Exception report held for 60 seconds; photograph this screen.\n");
+	uint64_t began = READ_SYSREG(CNTFRQ_EL0), now = READ_SYSREG(CNTVCT_EL0);
+	while (READ_SYSREG(CNTVCT_EL0) - now < 60 * began) {
+		wdt_pet();
+	}
 	ST->rt->reset_system(0 /* EfiResetCold */, 0, 0, NULL);
 	for (;;) {
 	}
@@ -3756,6 +3764,9 @@ fb_command(char *cmd)
 			set_result("running", cp, 0);
 			fb_reply("OKAY", "");
 			log_len = 0;
+			/* Show preparation/CPU handoff even if an early fault prevents USB
+			 * polling from resuming. The kernel takes over the display later. */
+			screen_quiet = 0;
 			print("== XNULOADER run (usb) ==\n");
 			if (!run_kernel(have_cp, cp)) {
 				set_result("not-started", 0, 0);

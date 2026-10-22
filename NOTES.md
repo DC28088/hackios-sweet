@@ -242,3 +242,15 @@ stays on the original core. common/run.sh now records a host transcript and
 defaults XL_FOLLOW=5. xl saves staging responses, a preflight loader log, and
 the launch response, and rejects a failed launch acknowledgment. No device
 commands or tests run; this host-script change needs no new kernel build.
+
+Next diagnostic run session20261022-233733: system uploaded92s; stage of
+20979592-byte kernel/helper succeeded0.800s, launch acknowledged0.001s.
+Preflight claims upper RAM100000000+f8000000. No live/final kernel log saved.
+Read-only fastboot query reports stock sweetin, not xnuloader. Host xl run
+still waiting, so no claim that XNU/GMU was reached. Found screen_quiet=1 in
+USB command loop hid run preparation and UEFI exception text; exception
+handler immediately ResetSystem'd. Loader now unmutes during launch and
+exceptions, holds exception text60s using architectural counter before its
+reset. Existing hardware watchdog may still reset earlier. Added loader_only
+CI input to compile this without rebuilding unchanged kernel/firmware.
+No device writes/boots performed; this is diagnostic instrumentation.

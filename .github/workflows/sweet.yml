@@ -8,11 +8,14 @@ on:
       firmware_only:
         type: boolean
         default: false
+      loader_only:
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
   kernel:
-    if: ${{ !inputs.firmware_only }}
+    if: ${{ !inputs.firmware_only && !inputs.loader_only }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -40,7 +43,7 @@ jobs:
           name: hackios-sweet-kernel
           path: out/kernel/
   firmware:
-    if: ${{ !inputs.kernel_only }}
+    if: ${{ !inputs.kernel_only && !inputs.loader_only }}
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     steps:
