@@ -1,0 +1,70 @@
+name: HackiOS Sweet
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  kernel:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang llvm lld flex bison autoconf automake libtool libncurses-dev python3-venv meson ninja-build libz-dev
+          bash ports/sweet/setup-toolchain.sh
+      - name: Build Sweet XNU
+        env:
+          THEOS: ${{ github.workspace }}/.theos
+        run: |
+          xnu/apply.sh
+          xnu-deps/setup.sh
+          mkdir -p out/kernel
+          ./xnu-build.sh -j4 -k > out/kernel/build.log 2>&1 || true
+          K=xnu-src/xnu-8796.121.2/BUILD/obj/DEVELOPMENT_ARM64_BCM2837/mach.development.bcm2837
+          test -s "$K"
+          cp "$K" out/kernel/
+          sha256sum out/kernel/mach.* > out/kernel/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hackios-sweet-kernel
+          path: out/kernel/
+  firmware:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential uuid-dev nasm acpica-tools gcc-aarch64-linux-gnu clang llvm lld mono-devel nuget python3-venv python3-distutils gettext
+      - name: Compile Sweet loader and firmware
+        run: |
+          xnuloader/build.sh
+          git init -q uefi-sweet
+          git -C uefi-sweet fetch --depth 1 https://github.com/tagicmi/Mu-Silicium-marble-davinci.git 098e303fd9703669ab06d38744cad14d49c0f702
+          git -C uefi-sweet checkout -q FETCH_HEAD
+          git -C uefi-sweet submodule update --init --depth 1 -- Binaries Common/Mu Common/Mu_OEM_Sample Common/Mu_Tiano_Plus Features/DFCI Mu_Basecore Silicon/Arm/Mu_Tiano Silicium-ACPI
+          python3 ports/sweet/prepare-firmware.py uefi-sweet
+          python3 -m venv .venv
+          .venv/bin/pip install setuptools==80.9.0
+          .venv/bin/pip install -r uefi-sweet/pip-requirements.txt
+          source .venv/bin/activate
+          export CLANGPDB_AARCH64_PREFIX=aarch64-linux-gnu-
+          (cd uefi-sweet && bash build_uefi.sh -d sweet -r DEBUG)
+          mkdir -p out/firmware
+          cp uefi-sweet/Build/sweetPkg/DEBUG_CLANGPDB/FV/SWEET_UEFI.fd out/firmware/
+          cp xnuloader/loader.efi out/firmware/
+          clang --target=aarch64-linux-gnu -c ports/sweet/BootShim.S -o out/firmware/shim.o
+          ld.lld -Ttext=0 --entry=_start out/firmware/shim.o -o out/firmware/shim.elf
+          llvm-objcopy -O binary out/firmware/shim.elf out/firmware/BootShim.bin
+          rm out/firmware/shim.o out/firmware/shim.elf
+          cp uefi-sweet/Resources/DTBs/sweet.dtb out/firmware/
+          (cd out/firmware && sha256sum * > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hackios-sweet-firmware
+          path: out/firmware/

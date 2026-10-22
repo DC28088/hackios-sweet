@@ -380,6 +380,7 @@ write_logs(const char *klog, uint64_t klog_len)
 static void
 flush_log(void)
 {
+	return; /* Sweet: live RAM log only, never overwrite a partition. */
 	write_logs(NULL, 0);
 }
 
@@ -553,6 +554,13 @@ static const struct platform platform_redwood = {
 	.fb_base = 0xE1000000,
 };
 
+static const struct platform platform_sweet = {
+ .name = "sweet", .io_base = 0x00400000, .io_size = 0x3FC00000,
+ .gic_dist = 0x17A00000, .gic_redist = 0x17A60000,
+ .cores = 8, .core_shift = 8, .small_cores = 0x3f,
+ .fb_base = 0x9C000000,
+};
+
 /*
  * The devices the loader knows, told apart by the framebuffer base their UEFI reports. A port to another
  * device adds its description here (common/new-device.sh writes a starting point, docs/PORTING.md says
@@ -560,6 +568,7 @@ static const struct platform platform_redwood = {
  */
 static const struct platform *const platforms[] = {
 	&platform_redwood,
+	&platform_sweet,
 };
 
 /* ------------------------------------------------------------------------ */

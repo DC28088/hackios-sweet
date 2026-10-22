@@ -80,3 +80,7 @@ __pycache__/
 !/xnu-deps/build/lzbitmap/libzbitmap.c
 !/xnu-deps/build/lzbitmap/libzbitmap.h
 /tools/android/f2fs-resize
+/.theos/
+/uefi-sweet/
+/.venv/
+/ports/sweet/private/
