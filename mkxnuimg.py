@@ -34,6 +34,12 @@ ap.add_argument('-o', '--output', default=os.path.join(HERE, 'xnu-redwood.img'))
 ap.add_argument('--mode', default='RELEASE')
 args = ap.parse_args()
 
+if TARGET == 'sweet':
+    subprocess.check_call([sys.executable,os.path.join(HERE,'ports/sweet/package.py'),
+      '--firmware',os.path.join(HERE,'out/firmware'),'--loader',os.path.join(HERE,'out/loader/loader.efi'),
+      '--template',os.path.join(HERE,'out/firmware/template.img'),'--out',args.output])
+    sys.exit(0)
+
 fd_path = os.environ.get('UEFI_FD') or os.path.join(MU, f'Build/{TARGET}Pkg/{args.mode}_CLANGPDB/FV/SILICIUM_UEFI.fd')
 if os.path.isfile(fd_path) and os.path.isdir(os.path.join(MU, 'BootShim')):
     shim_dir = os.path.join(MU, 'BootShim')

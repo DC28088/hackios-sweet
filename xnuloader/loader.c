@@ -859,7 +859,7 @@ __asm__ (
         "  mov x0, #0x0002\n"                   /* PSCI CPU_OFF: does not return */
         "  movk x0, #0x8400, lsl #16\n"
         "  cbnz x9, 2f\n"
-        "  smc #0\n"
+        "   .inst 0xd4000003\n"
         "1: wfi\n"
         "  b 1b\n"
         "2: hvc #0\n"
@@ -3963,10 +3963,11 @@ efi_main(efi_handle image, efi_system_table *st)
 	wdt_arm();
 
 	int have_payload = parse_payload(&pi, 0);
-	if (have_payload && pi.usb_mode && usb_start()) {
-		flush_log();
-		usb_command_loop();
-	}
+	if (have_payload && pi.usb_mode) {
+        if (usb_start()) {flush_log();usb_command_loop();}
+        print("sweet: resident USB unavailable; no kernel/root boot attempted\n");
+        for (;;) {wdt_pet();BS->stall(100000);}
+    }
 
 	/* One-shot mode: run the kernel that came with the image, then reset. */
 	if (have_payload) {

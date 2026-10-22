@@ -50,6 +50,11 @@ if ! skip images; then
 fi
 
 if ! skip boot && [ "$KIND" = phone ]; then
+ if [ "$DEVICE" = sweet ]; then
+  python3 ports/sweet/package.py --firmware out/firmware --loader out/loader/loader.efi --template out/firmware/template.img --out out/sweet-boot.img
+  echo "build: out/sweet-boot.img (resident USB loader; APFS images uploaded separately)"
+  exit 0
+ fi
 	# the UEFI with the loader inside, the way `xl enter` makes it: the loader then brings up its USB link
 	L=xnuloader/loader.efi; [ -f $L ] || L=prebuilt/loader.efi
 	python3 xnuloader/mkpayload.py -o out/usb-payload.bin loader.efi=$L --usb > /dev/null

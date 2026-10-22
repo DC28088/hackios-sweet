@@ -47,3 +47,11 @@ Source2048b0f. No runtime test. Kernel39772464704 failed on missing host
 uuid/uuid.h before exporthdrs; added uuid-dev. Firmware still running.
 Latest work also closes direct write_logs partition paths (not only flush_log),
 adds bounded touch-power synchronization and A618 register protection table.
+
+GLES files locally checksum/ARM64 validated. libOSMesa.8.dylib14822264bytes
+SHA25615b698258864d0ef4294d7d426d55cfb360edce1fb5aabfddc045b2dc5da2b19;
+libredwood-gl.dylib541896bytes SHA25615de976fbd8a796ec455710b6855c0290908a63ac9212077e0e6823fa4a59861.
+New strict Sweet packager ports/sweet/package.py validates Sweet FD size,
+ARM64 BootShim/PE, DTB magic; no fallback to upstream Redwood prebuilt pieces.
+Loader in USB mode now refuses rootless one-shot boot if USB setup fails.
+No device commands performed. Firmware39772464704 still installing dependencies.
