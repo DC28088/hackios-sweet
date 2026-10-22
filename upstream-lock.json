@@ -1,0 +1,14 @@
+{
+  "kernel": {
+    "repository": "https://github.com/oosexgang/hackios-xnu-kernel",
+    "commit": "8e61187098f2c26c5daee8f9f72b6416aa64b9ab"
+  },
+  "userland": {
+    "repository": "https://github.com/oosexgang/hackios-xnu-userland",
+    "commit": "906425b75e02b4f99eb5d7bb1ef7c9583472d772"
+  },
+  "sweet_firmware": {
+    "repository": "https://github.com/tagicmi/Mu-Silicium-marble-davinci",
+    "commit": "098e303fd9703669ab06d38744cad14d49c0f702"
+  }
+}
