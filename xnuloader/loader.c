@@ -296,6 +296,7 @@ static char out_buf[2 * 1024 * 1024];
 /* the storage's reads for the kernel land here (block_poll); also where the log is read back */
 #define BLOCK_BUFFER_SIZE  (4u << 20)
 static uint8_t block_buffer[BLOCK_BUFFER_SIZE] __attribute__((aligned(0x2000)));
+static __attribute__((noinline)) uint8_t *block_buffer_offset(uint64_t offset) {uint8_t *p=block_buffer;__asm__ volatile("" : "+r"(p));return p+offset;}
 static const char *staged_data = out_buf;   /* what "upload" sends: normally the log in out_buf */
 static uint64_t staged_len;
 
@@ -2057,7 +2058,7 @@ block_io2_probe(efi_handle h, efi_block_io *bio)
 	for (int i = 0; i < 8; i++) {
 		/* other places than the synchronous reads, so that nothing the storage kept is read again */
 		s = bio2->read_blocks_ex(bio2, bio2->media->media_id, (uint64_t)i * (64ULL << 20) / bs + 1031,
-		    &tokens[i], bs, block_buffer + 1048576 + i * 65536);
+		    &tokens[i], bs, block_buffer_offset(1048576) + i * 65536);
 		if (EFI_ERROR(s)) {
 			print("ufs: probe: ReadBlocksEx %d failed %x\n", (uint64_t)i, s);
 			return;
@@ -2415,7 +2416,7 @@ smc_call(uint64_t id, uint64_t a1, uint64_t a2, uint64_t *r1, uint64_t *r2)
 	register uint64_t x2 __asm__("x2") = a2;
 	register uint64_t x3 __asm__("x3") = smc_x3;
 
-	__asm__ volatile ("smc #0" : "+r" (x0), "+r" (x1), "+r" (x2), "+r" (x3)
+	__asm__ volatile (".inst 0xd4000003" : "+r" (x0), "+r" (x1), "+r" (x2), "+r" (x3)
                 : : "x4", "x5", "x6", "x7", "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17");
 	if (r1 != NULL) {
 		*r1 = x1;

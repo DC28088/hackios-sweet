@@ -30,3 +30,13 @@ the HackiOS original /redwood/lib frontend, not the previous NativeAdreno ABI.
 Local vendor firmware exists in /home/dan/ios-sweet/research/gpu/device-firmware
 (a618_gmu.bin, a630_sqe.fw, a615_zap.*); never commit it. Sweet live FDT is
 /home/dan/ios-sweet/backup/live-fdt.dtb; use it read-only for public board facts.
+
+Board adaptation continued: imported Sweet's existing GENI I2C touch (FocalTech/
+GT9896), PMIC keys and serialized RPMh driver from ios-sweet through0114.
+Adapted their output to HackiOS /dev/redwood-touch; no old HID service reused.
+GPU rail prerequisites now use that same RPMh owner; A618 GMEM window programmed.
+Initial CI39771804932 failed before kernel compilation (exported headers) and
+loaderCOFF fixup.39772127622 identifies ADRP block_buffer+1MiB addend and SMC
+assembler feature check. Replaced constant-addend pointer with opaque base,
+SMC encoding with identical architectural .inst. Kernel export log now emitted
+on failure. GLES39772020663 still building at time of this entry.

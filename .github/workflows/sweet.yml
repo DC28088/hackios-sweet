@@ -24,7 +24,7 @@ jobs:
           THEOS: ${{ github.workspace }}/.theos
         run: |
           xnu/apply.sh
-          xnu-deps/setup.sh
+          xnu-deps/setup.sh || { cat xnu-deps/exporthdrs.log 2>/dev/null; exit 1; }
           mkdir -p out/kernel
           ./xnu-build.sh -j4 -k > out/kernel/build.log 2>&1 || true
           K=xnu-src/xnu-8796.121.2/BUILD/obj/DEVELOPMENT_ARM64_BCM2837/mach.development.bcm2837

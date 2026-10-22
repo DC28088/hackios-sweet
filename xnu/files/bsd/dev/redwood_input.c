@@ -205,6 +205,9 @@ static const struct cdevsw touch_cdevsw = {
 	.d_mmap = eno_mmap, .d_strategy = eno_strat, .d_type = 0
 };
 
+extern void sweet_touch_init(void);
+extern void sweet_keys_init(void);
+
 void
 redwood_input_init(void)
 {
@@ -216,12 +219,27 @@ redwood_input_init(void)
 	exit_call = thread_call_allocate(exit_hold_elapsed, NULL);
 	redwood_cpufreq_init();
 	redwood_virtio_input_init();
-	redwood_goodix_init();
-	redwood_buttons_init();
+	sweet_touch_init();
+	sweet_keys_init();
 	redwood_battery_init();
 	redwood_ufs_init();
 	redwood_net_init();
 	redwood_adreno_init();
 	redwood_wifi_init();
 	redwood_adsp_init();
+}
+
+/* Sweet hardware input -> the HackiOS backboardd event protocol. */
+void sweet_hid_touch(int finger,int down,int x,int y) {
+ static uint32_t active;
+ if(finger<0 || finger>=10 || x<0 || x>=1080 || y<0 || y>=2400)return;
+ uint32_t bit=1u<<finger;
+ uint32_t type=down ? ((active&bit)?REDWOOD_TOUCH_MOVE:REDWOOD_TOUCH_DOWN):REDWOOD_TOUCH_UP;
+ if(!down && !(active&bit))return;
+ if(down)active|=bit;else active&=~bit;
+ redwood_touch_post(type,finger,x,y);
+}
+void sweet_hid_key(int key,int down) {
+ static const unsigned map[]={REDWOOD_BUTTON_LOCK,REDWOOD_BUTTON_VOLUME_UP,REDWOOD_BUTTON_VOLUME_DOWN};
+ if(key>=0 && key<3)redwood_touch_post(down?REDWOOD_BUTTON_DOWN:REDWOOD_BUTTON_UP,map[key],0,0);
 }

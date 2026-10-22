@@ -521,6 +521,8 @@ cx_is_on(void)
 }
 
 static void stale_stop(void);
+extern int sweet_rpmh_arc_raise(const char *,unsigned);
+extern int sweet_rpmh_arc_require(const char *,unsigned);
 
 /*
  * The switch hangs on the rail "cx.lvl", which is up for as long as the SoC runs at all; the
@@ -530,6 +532,7 @@ static void stale_stop(void);
 static bool
 step_cx_power(void)
 {
+ if(sweet_rpmh_arc_require("cx.lvl",48) || sweet_rpmh_arc_require("mx.lvl",80) || sweet_rpmh_arc_raise("gfx.lvl",48))return false;
 	uint32_t gdscr;
 
 	if (!gpucc_answers()) {
@@ -2383,6 +2386,9 @@ step_core_start(void)
 	put64(&gpu, "uche_write_thru_base", UCHE_WRITE_THRU_BASE, 0x0001fffffffff000ull);
 	put(&gpu, "uche_filter_cntl", UCHE_FILTER_CNTL, 0x804);
 	put(&gpu, "uche_cache_ways", UCHE_CACHE_WAYS, 0x4);
+ put64(&gpu,"uche_gmem_min",GPU_WORD(0x0e0b),0x100000);
+ put64(&gpu,"uche_gmem_max",GPU_WORD(0x0e0d),0x17ffff);
+ put(&gpu,"vpc_debug_eco",GPU_WORD(0x9e00),0x00180000);
 	put(&gpu, "cp_roq_thresholds_2", CP_ROQ_THRESHOLDS_2, 0x010000c0);
 	put(&gpu, "cp_roq_thresholds_1", CP_ROQ_THRESHOLDS_1, 0x8040362c);
 	/* A618 has no LPAC. */

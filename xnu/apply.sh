@@ -27,4 +27,5 @@ git checkout -q -b redwood "$TAG"
 echo 'BUILD/' >> .git/info/exclude
 git apply --whitespace=nowarn "$HERE/redwood.patch"
 cp -a "$HERE/files/." .
+printf '\nbsd/dev/sweet_touch.c standard\nbsd/dev/sweet_keys.c standard\nbsd/dev/sweet_rpmh.c standard\n' >> bsd/conf/files
 echo "apply.sh: $DIR: $TAG + $(grep -c '^diff --git' "$HERE/redwood.patch") changed and $(find "$HERE/files" -type f | wc -l) new files"
