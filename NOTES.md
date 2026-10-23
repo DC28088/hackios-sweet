@@ -277,3 +277,13 @@ Enable Sweet's existing other-CPU startup progress and default bootcpu=7 so
 USB logging remains available. Raw partition logging remains disabled.
 Build pending; this corrects integration/visibility, not a verified boot or
 GPU fix. No hardware access or tests performed.
+
+BDS build milestone: firmware and loader CI39891529224 SUCCESS (e02ce5f),
+firmware4m10s/loader22s. Downloaded both artifacts, all SHA256SUMS match.
+Canonical out/firmware and out/loader updated; backups retained in
+out/{firmware,loader}-before-bds-39891529224. xnu-usb.img regenerated for xl.
+Local combined image out/hackios-sweet-bds.img (7991296 bytes), SHA256
+479e8f26140ef60cf3f0acadc5c9b2c9dea43e51ed0c8897a567480240a4b20e.
+Kernel stays39826212188; APFS/GLES unchanged. Package39892018739 uses these
+explicit component run IDs. No phone boot, device writes or runtime tests.
+Boot success/reset resolution and GPU rendering remain unverified.

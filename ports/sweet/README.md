@@ -13,8 +13,10 @@
   frontend, built together for iOS16.5. No previous NativeAdreno service or
   sweetgl.dylib is part of this userspace interface.
 
-These are compiled source adaptations. No hardware boot or compositor
-rendering result is available yet. Wi-Fi, audio, camera and CPU frequency
+These are compiled source adaptations. Sweet UEFI and the USB loader have
+run on hardware and uploaded the APFS image. XNU startup and compositor
+rendering have not yet been established; the previous session reset after
+the upload. Wi-Fi, audio, camera and CPU frequency
 control have not been ported; their Redwood boot options remain off.
 
 ## Build artifacts
@@ -82,3 +84,36 @@ and upload the system image into RAM through the resident loader. Vendor
 firmware is never committed. Use `common/run.sh sweet` only after those
 images and Sweet artifacts have been prepared. That script boots temporarily;
 there is no reason to flash recovery, bootloaders or userdata for bring-up.
+
+## Firmware handoff and current diagnostics
+
+HackiOS upstream uses Mu-Silicium and starts its XNUP loader in the boot
+manager. The Sweet firmware comes from its own pinned Mu device port; a
+Project Silicium banner is expected before the HackiOS handoff.
+
+Sweet now leaves `PlatformBootManagerAfterConsole` intact. The payload starts
+from `PlatformBootManagerPriorityBoot`, after the platform connection sequence
+and before disk BootOrder, with `PlatformBootManagerUnableToBoot` as fallback.
+Upstream Redwood only uses the fallback hook; the priority hook is needed here
+to avoid the Sweet Mu version's default disk entries intercepting the payload.
+EndOfDxe already executes in BeforeConsole. This sequencing correction is not
+proof that it caused the observed reset.
+
+The handoff prints `HackiOS Sweet: BDS setup complete`, reports LoadImage
+status, and holds any loader-return/error screen for manual restart. The loader
+already disables the standard EFI watchdog. Sweet enables the upstream CPU
+progress reporting into RAM/USB and uses `bootcpu=7` by default, keeping the
+loader on its original CPU while XNU starts on another available core. Raw
+partition logging remains disabled.
+
+Once the matching artifacts are installed into `out/firmware` and `out/loader`,
+start a temporary session from FASTBOOT:
+
+```sh
+bash common/run.sh sweet 900
+```
+
+This uploads the existing APFS images; it does not require rebuilding them.
+The new handoff message identifies firmware sequencing, while CPU-start and
+kernel log messages identify how far XNU gets. A successful upload alone does
+not establish kernel execution or GPU acceleration.
