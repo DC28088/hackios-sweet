@@ -556,6 +556,7 @@ static const struct platform platform_redwood = {
 
 static const struct platform platform_sweet = {
  .name = "sweet", .io_base = 0x00400000, .io_size = 0x3FC00000,
+ .log_other_cpu = 1, /* RAM/USB progress; partition logging is disabled. */
  .gic_dist = 0x17A00000, .gic_redist = 0x17A60000,
  .cores = 8, .core_shift = 8, .small_cores = 0x3f,
  .fb_base = 0x9C000000,

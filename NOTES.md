@@ -262,3 +262,18 @@ out/hackios-sweet-handoff.img using unchanged UBWC-corrected kernel and
 USB-peripheral firmware. Package CI39829459841 dispatched for same components.
 Next manual boot uses same bootcpu=7 command; obtain photo of last visible
 loader/exception lines if it resets before USB polling resumes. No flashing.
+
+2026-10-23 BDS integration audit: confirmed pinned Sweet Mu098e303f uses
+PlatformBootManagerLib with AfterConsole and priority/fallback hooks. Our
+old injection never returned from the beginning of AfterConsole, skipping
+ConnectSequence/dispatch. EndOfDxe was already signalled in BeforeConsole;
+the loader already disables the standard UEFI watchdog. Neither is a proven
+reset cause. Move XNUP handoff to PriorityBoot (after full AfterConsole, before
+disk BootOrder), with upstream UnableToBoot fallback. Using only the latter
+would allow Mu's default disk EFI entries to intercept the payload. Retain
+Sweet firmware/USB/RAM fixes and add visible handoff/load errors, bounded
+payload traversal and a stopped screen on loader failure rather than reset.
+Enable Sweet's existing other-CPU startup progress and default bootcpu=7 so
+USB logging remains available. Raw partition logging remains disabled.
+Build pending; this corrects integration/visibility, not a verified boot or
+GPU fix. No hardware access or tests performed.
