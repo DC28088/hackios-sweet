@@ -6,6 +6,8 @@ source ./xnu-env.sh
 UPSTREAM=${1:?upstream source directory}
 OUTPUT=$PWD/out/current-gles
 mkdir -p "$OUTPUT" "$UPSTREAM/userland/obj"
+# Sweet touch-service startup race (see the patch header); upstream source is otherwise unchanged.
+git -C "$UPSTREAM" apply "$PWD/ports/sweet/patches/inject-service-race.patch"
 MESA=$OUTPUT/libOSMesa.8.dylib
 printf '%s  %s\n' 15b698258864d0ef4294d7d426d55cfb360edce1fb5aabfddc045b2dc5da2b19 "$MESA" | sha256sum -c -
 "$XNUDEPS/host/bin/nm" -gU "$MESA" | awk '{print $NF}' | sed -n 's/^_\(gl[A-Za-z0-9_]*\)$/\1/p' | sort -u > "$OUTPUT/exported-gl.txt"

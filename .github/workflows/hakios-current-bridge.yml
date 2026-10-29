@@ -2,7 +2,7 @@ name: Current HakiOS EAGL bridge
 on:
   push:
     branches: [codex/hakios-refresh-20261029]
-    paths: [.github/workflows/hakios-current-bridge.yml, ports/sweet/build-current-bridge.sh]
+    paths: [.github/workflows/hakios-current-bridge.yml, ports/sweet/build-current-bridge.sh, ports/sweet/patches/inject-service-race.patch]
   workflow_dispatch:
 permissions:
   contents: read

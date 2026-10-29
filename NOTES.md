@@ -16,12 +16,15 @@ helper's virtual HID service (inject.c make_service), not a Goodix problem.
 Guess (unverified): the event server restart after the service is opened drops
 or half-restores its properties; fix is to re-make the service when the server
 dies again, or to wait for backboardd's reconnect before making it.
-Buttons: key 0 (Lock) fired 36 down/up pairs incl. bursts of 6 within ~1 s
-that no one pressed; key 2 (Vol Down) 5 pairs. Spurious Lock presses also toggle
-the screen off/on ("backlight dim/off" cancelling touches), so Power debounce
-is still insufficient. Phone returned/left running; no device writes.
-Next: fix helper service re-creation (prepare-current-helper.py / inject.c),
-tighten Lock key glitch filter, CI build, retry.
+Buttons (corrected): key 0 (Lock) logged 11 down/up pairs and key 2 (Vol Down)
+5; they line up with backboardd "Lock page:0xC usage:0x30" lines, so they are
+probably the user's repeated presses, not glitches (earlier note of "spurious"
+was unverified). iOS set the backlight factor to 0/1 on them, but there is no
+Sweet backlight driver yet, so the screen cannot visibly turn off or dim: the
+missing visible Power effect belongs to the brightness work.
+Fix in progress: ports/sweet/patches/inject-service-race.patch (each make_service
+attempt gets its own ProductID, 2 s pause after removal, final state logged),
+applied by build-current-bridge.sh; then CI bridge build, new helper, retry.
 
 ## Log review of 173540 run: touch and key events reach iOS (2026-10-29)
 

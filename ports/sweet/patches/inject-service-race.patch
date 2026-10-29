@@ -1,0 +1,29 @@
+--- a/userland/src/inject.c	2026-10-29 19:11:56.414929165 +0530
++++ b/userland/src/inject.c	2026-10-29 19:11:56.460978932 +0530
+@@ -787,6 +787,16 @@
+ 	/* the dictionary stays: it is what service_copy_property() answers from */
+ 	made->properties = properties;
+ 	for (int attempt = 1; attempt <= 20; attempt++) {
++		/*
++		 * Sweet: every attempt is a different device. When the first service was removed and made
++		 * again under the same identity, backboardd sometimes kept the half-removed record
++		 * ("strangeness: primary page is zero") and took our touch screen for an external
++		 * accessory (builtIn NO) whose events it ignores.
++		 */
++		CFNumberRef product_id = number(attempt);
++
++		CFDictionarySetValue(properties, CFSTR("ProductID"), product_id);
++		CFRelease(product_id);
+ 		made->opened = false;
+ 		service = IOHIDVirtualServiceClientCreateWithCallbacks(client, properties, &service_callbacks, NULL, made);
+ 		if (service == NULL) {
+@@ -802,7 +812,9 @@
+ 		IOHIDVirtualServiceClientRemove(service);
+ 		CFRelease(service);
+ 		service = NULL;
++		sleep(2);       /* Sweet: let the server finish removing it before the next one appears */
+ 	}
++	say("hakios: input: \"%s\" %s after the server took it\n", product, made->opened ? "stays" : "was never opened");
+ 	return service;
+ }
+ 
