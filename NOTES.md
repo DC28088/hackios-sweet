@@ -1,3 +1,20 @@
+## Performance: gl=0 and cpus=8 (2026-10-29)
+
+Run 193912 (cpus=8, gl=1): hakios-gl frames ~1 s each (softpipe, 3 draws,
+1158887 us); touch path fine (read lag avg 54 us, send avg 227 us). User: minutes
+to open an app. Run 194253 (cpus=8, gl=0 = CoreAnimation's own CPU renderer):
+user: much better, still under 10 fps. tl: v intervals while in use: 229 of 329
+are 70-120 ms (about 10 fps), ready->done small, so the CPU renderer takes
+~100 ms/frame at 1080x2400 and is mostly single-threaded. sweet-current.conf
+BOOTARGS now cpus=8 and gl=0. Screenshot: real iOS 16.5 home screen; black
+wallpaper (PosterBoard services missing, upstream HakiOS also has none), grey
+unblurred dock/search, blank Weather/Calendar widgets, battery shown nearly
+empty (no battery driver). The original port's wallpaper/blur came from its
+Metal->Vulkan->Turnip stack on a custom A618 kernel driver (35 GPU patches
+0081-0144 in ios-sweet/xnu/patches, ~12-30 fps); none of it exists here, so
+wallpaper correctness depends on the GPU path. CPU0 remains with the loader;
+using it would cost live logs/clean return for about +1 core.
+
 ## Touch accepted by iOS; SMP enabled with cpus=8 (2026-10-29)
 
 Kernel unchanged (0d1d544d...). Bridge CI40886524209 (commit after e53a58e): the
