@@ -163,6 +163,16 @@ run() { # run <oem command> <label>
 		local deadline=$(( $(date +%s) + ${XL_SECS:-8} + 100 )) followed=$(date +%s)
 		while :; do
 			result=$(FB_TIMEOUT=15 fb getvar result | grep '^result:')
+			if [ -z "$result" ]; then
+				local product
+				product=$(FB_TIMEOUT=3 fb getvar product)
+				case "$product" in
+				*"product: sweet"*)
+					printf '%s\n' "$product" > "$log.reset"
+					echo "xl: phone returned to stock fastboot; this kernel run reset before returning its log"
+					return 2 ;;
+				esac
+			fi
 			case "$result" in ""|*running*) ;; *) break ;; esac
 			[ "$(date +%s)" -ge "$deadline" ] && { result=; break; }
 			if [ -n "$XL_FOLLOW" ] && [ $(( $(date +%s) - followed )) -ge "$XL_FOLLOW" ]; then
