@@ -1,3 +1,38 @@
+## FULL APFS IOS USERSPACE VERIFIED; GLES package correction (2026-10-29)
+
+Fresh-loader run logs/163515-run.log completed180s, returning207,498 kernel
+log bytes. It mounted iOS16.5 APFS, ran Apple's launchd and SpringBoard/
+BackBoard. No kernel panic in this run. Screenshot out/hakios-20261029/
+ios-first-screen.png shows verbose text and boot logo. UI home screen NOT
+verified. CoreAnimation explicitly failed to initialize Metal/OpenGLES contexts.
+The user saw Apple logo plus lsd CPU-monitor entitlement warning spam. The
+180-second capture returned normally to loader; screen then stays frozen.
+The24-second IRQ-mask behavior did NOT prevent full capture; do not change
+it based on earlier suspicion. Live USB logs continued to the end.
+
+Found two protocol defects: set_result/getvar screen format via bounded
+log_buf, so a full log breaks replies; empty logs stage DATA00000000, which
+stalls firmware USB uploads. Loader c144c84 separates protocol formatting,
+stages a newline for empty logs, and keeps returned kernel logs from being
+mirrored back into Sweet's own small log buffer. CI40864379277 passed.
+
+Current helper's new hook expects libhakios.gl.dylib but original helper
+contained only libredwood-gl.dylib. Built the current matching EAGL bridge,
+inject and SpringBoard hook from88513176 using the verified Mesa binary from
+CI39772020663 (softpipe+freedreno, SHA15b698258864d0ef...). Khronos XML pinned
+6af574a14089ccfee87efe230ebcdd8742859813; table uses actual Mesa exports.
+CI40864530667 passed. This Mesa binary still has the old hardware backend;
+only software GLES bringup is qualified by this reuse, not A618 acceleration.
+
+Verified outputs: out/hakios-20261029/current-gles and loader-usb-replies.
+New separate helper out/hakios-gles-20261029/root.apfs includes all matching
+libraries. common/devices/sweet-current.conf now selects it and current loader,
+quiet screen (no -v), gpu=0 gl=1. Next full RAM boot after user enters FASTBOOT:
+`bash common/run.sh sweet-current 900`. No raw partition changes.
+Latest package out/hakios-20261029/hakios-sweet-ui.img; APFS upload required.
+User asked to switch current HakiOS; full A618 and touch/WiFi/BT/audio driver
+migration remains pending. Original working ios-sweet/HFS+ root is intact.
+
 ## VERIFIED MINIMAL USERSPACE (2026-10-29)
 
 logs/162730-run.log includes `Hello from user space on Darwin!`, process1,
