@@ -1,5 +1,8 @@
 name: Pinned HakiOS kernel for Sweet bringup
 on:
+  push:
+    branches: [codex/hakios-refresh-20261029]
+    paths: [.github/workflows/hakios-current.yml]
   workflow_dispatch:
 permissions:
   contents: read
