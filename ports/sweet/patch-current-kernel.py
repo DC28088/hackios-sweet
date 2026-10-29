@@ -57,7 +57,7 @@ print('Applied board-selectable timer PPI; Sweet must boot with gic_vtimer=19.')
 # queue/HID bridge. The Redwood drivers must never probe a Sweet board.
 source = Path(__file__).resolve().parent / 'input'
 target = a.upstream / 'xnu/files/bsd/dev'
-names = ['sweet_touch.c', 'sweet_keys.c', 'sweet_rpmh.c', 'hakios.sweet_input.c']
+names = ['sweet_touch.c', 'sweet_keys.c', 'sweet_rpmh.c', 'sweet_gpu.c', 'hakios.sweet_input.c']
 for name in names:
     shutil.copy2(source / name, target / name)
 f = a.upstream / 'xnu/hakios.patch'
@@ -67,7 +67,7 @@ assert s.count(old) == 1
 s = s.replace(old, old + ''.join('+bsd/dev/' + name + '\t\tstandard\n' for name in names))
 old = '@@ -109,6 +109,41 @@'
 assert s.count(old) == 1
-s = s.replace(old, '@@ -109,6 +109,45 @@')
+s = s.replace(old, '@@ -109,6 +109,46 @@')
 f.write_text(s)
 f = target / 'hakios.input.c'
 s = f.read_text()

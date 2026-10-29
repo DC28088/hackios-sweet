@@ -9,6 +9,7 @@
 
 void sweet_keys_init(void);
 void sweet_touch_init(void);
+void sweet_gpu_probe(void);
 void hakios_sweet_input_init(void);
 void sweet_hid_key(int key, int down);
 void sweet_hid_touch(int finger, int down, int x, int y);
@@ -53,4 +54,5 @@ hakios_sweet_input_init(void)
 {
 	sweet_keys_init();
 	sweet_touch_init();
+	sweet_gpu_probe(); /* sweetgpu=N: A618 bring-up stages; off by default */
 }
