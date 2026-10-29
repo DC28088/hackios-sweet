@@ -1,3 +1,19 @@
+## First refreshed-kernel attempt and follow-up (2026-10-29)
+
+Current upstream prebuilt SHA03e794e8 boot attempted with gpu=0 cpus=1
+bootcpu=7 and separately prepared helper SHA6e439dff. Sweet USB loader came
+up, APFS upload completed (2376MiB/93s), kernel/helper staging and launch were
+acknowledged. User saw Project Silicium/text, then reset; fastboot sweetin
+returned. No kernel progress was captured. Logs: logs/074146-run.log.*.
+This is a failed boot, not an iOS/GPU result. Original userdata untouched.
+
+CI40804541130 linked/stripped the new kernel, then failed generating Apple
+KEXT export symbolsets. Use XNU's `build` target (MakeInc.top:527), which
+compiles/links the kernel without the separate `config` export packaging.
+Do not ignore compiler/linker failures. Restore upstream USB-mode console
+muting during run: our old debugging change re-enabled ConOut during handoff.
+This is a possible stall source, not yet a confirmed reset diagnosis.
+
 # Current HakiOS refresh (2026-10-29)
 
 User requests current OOSEX GANG HakiOS on Sweet, while retaining Claude's

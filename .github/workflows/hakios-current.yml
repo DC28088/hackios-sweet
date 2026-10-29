@@ -31,7 +31,7 @@ jobs:
           cd upstream-current
           xnu/apply.sh
           xnu-deps/setup.sh
-          ./xnu-build.sh -j4 -k > ../out/hakios-current/build.log 2>&1
+          ./xnu-build.sh -j4 build > ../out/hakios-current/build.log 2>&1
           cp xnu-src/xnu-8796.121.2/BUILD/obj/DEVELOPMENT_ARM64_BCM2837/mach.development.bcm2837 ../out/hakios-current/
           git rev-parse HEAD > ../out/hakios-current/UPSTREAM_COMMIT
           cd ../out/hakios-current

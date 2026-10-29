@@ -3765,9 +3765,9 @@ fb_command(char *cmd)
 			set_result("running", cp, 0);
 			fb_reply("OKAY", "");
 			log_len = 0;
-			/* Show preparation/CPU handoff even if an early fault prevents USB
-			 * polling from resuming. The kernel takes over the display later. */
-			screen_quiet = 0;
+			/* Keep USB-mode output in RAM, as upstream does. UEFI's console
+			 * can depend on interrupts/display services the handoff takes over.
+			 * Exception handling explicitly unmutes only after a fault. */
 			print("== XNULOADER run (usb) ==\n");
 			if (!run_kernel(have_cp, cp)) {
 				set_result("not-started", 0, 0);
