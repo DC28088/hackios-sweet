@@ -13,8 +13,11 @@
  *      200 MHz), then reads GMU status and the SMMU ID registers
  *   6  after 5: stages a618_gmu.bin (fw/ of the small image) into the GMU's instruction TCM and
  *      reads it back; the GMU's processor stays in reset
- * No GX, GMU boot, SMMU context or command submission at any stage (stages 5 and 6 are
- * ios-sweet patches 0089-0091). Shared rails are never lowered.
+ *   7  after 6: wired uncached memory and an SMMU context for the GMU, verified by hardware
+ *      translation probes (sweet_gpu_boot.c); the GMU's processor stays in reset
+ *   8  after 7: releases the GMU's processor and runs its cold boot and HFI handshake
+ * No GX power by the host, GPU command processor or command submission at any stage (stages 5-8
+ * are ios-sweet patches 0089-0098). Shared rails are never lowered.
  */
 #if defined(__arm64__)
 #include <sys/param.h>
@@ -36,6 +39,7 @@ extern int sweet_rpmh_arc_read(const char *res);
 extern int sweet_rpmh_arc_require(const char *res, unsigned minimum);
 extern int sweet_rpmh_arc_raise(const char *res, unsigned target_vlvl);
 extern kern_return_t thread_terminate(thread_t);
+extern int sweet_gpu_boot(unsigned stage, vm_offset_t gpucc, vm_offset_t gmu_base, vm_offset_t smmu_base);
 extern const uint8_t *hakios_image_file(const char *dir, const char *name, uint64_t *size, int *disk_out);
 void sweet_gpu_probe(void);
 
@@ -457,7 +461,7 @@ gpu_gmu_prepare(int stage)
 	if (id0 == 0xffffffffu || id1 == 0xffffffffu || id2 == 0xffffffffu || !id0) {
 		return EIO;
 	}
-	if (stage == 6) {
+	if (stage >= 6) {
 		uint64_t size = 0;
 		int disk = -1;
 		unsigned verified = 0;
@@ -473,6 +477,10 @@ gpu_gmu_prepare(int stage)
 		if (error) {
 			return error;
 		}
+	}
+	if (stage >= 7) {
+		/* Stage 7 maps the GMU's shared memory; stage 8 releases the GMU (sweet_gpu_boot.c). */
+		return sweet_gpu_boot((unsigned)stage, gpucc, gmu_base, smmu_base);
 	}
 	printf("SWEET ADRENO: GMU preparation complete; GX remains firmware controlled, no submission\n");
 	return 0;
@@ -572,7 +580,7 @@ sweet_gpu_probe(void)
 	}
 	gpu_probe_attempted = 1;
 	(void)PE_parse_boot_argn("sweetgpu", &enabled, sizeof(enabled));
-	if (enabled < 1 || enabled > 6) {
+	if (enabled < 1 || enabled > 8) {
 		return;
 	}
 	printf("SWEET GPU: GPUCC audit at %#x; stage=%d, no GMU access\n", SWEET_GPUCC_PA, enabled);
