@@ -3410,8 +3410,13 @@ run_kernel(int have_checkpoint, uint64_t checkpoint)
 			}
 		}
 		boot_stage(7);
-		uint64_t sp_now = (uint64_t)(uintptr_t)__builtin_frame_address(0);
-		clean_dcache(sp_now - 0x2000, sp_now + 0x2000);
+		if (PLAT != &platform_sweet) {
+			uint64_t sp_now = (uint64_t)(uintptr_t)__builtin_frame_address(0);
+			clean_dcache(sp_now - 0x2000, sp_now + 0x2000);
+		}
+		/* Sweet's firmware stack remains local to its live CPU, not read by
+		 * the kernel CPU. Avoid a guessed range across stack guard pages. */
+		boot_stage(0x0b);
 		flush_dcache(phys_base, top);
 		boot_stage(8);
 		if (checkpoint == CHECKPOINT_SELFTEST) {
