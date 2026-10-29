@@ -3,8 +3,9 @@
  * Coordinates from the physical 1080x2400 touch panel are normalized by the
  * queue ABI; BackBoard maps them to its current logical display size.
  */
-#include <sys/hakios.input.h>
+#include <sys/param.h>
 #include <sys/systm.h>
+#include <sys/hakios.input.h>
 
 void sweet_keys_init(void);
 void sweet_touch_init(void);
