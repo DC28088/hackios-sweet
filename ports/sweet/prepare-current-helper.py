@@ -13,6 +13,7 @@ p.add_argument('--upstream', type=Path, required=True)
 p.add_argument('--original-helper', type=Path, default=Path('userland/root'))
 p.add_argument('--output', type=Path, required=True)
 p.add_argument('--gles-dir', type=Path, help='verified current bridge build output')
+p.add_argument('--no-demo', action='store_true', help='disable inherited diagnostic/CPU benchmark launch job')
 a = p.parse_args()
 assert subprocess.check_output(['git', '-C', str(a.upstream), 'rev-parse', 'HEAD'], text=True).strip() == PIN
 for line in (a.upstream / 'prebuilt/SHA256SUMS').read_text().splitlines():
@@ -25,6 +26,8 @@ for line in (a.upstream / 'prebuilt/SHA256SUMS').read_text().splitlines():
 a.output.mkdir(parents=True, exist_ok=False)
 root = a.output / 'helper-tree'
 shutil.copytree(a.original_helper, root, symlinks=True)
+if a.no_demo:
+    (root / 'LaunchDaemons/com.redwood.demo.plist').unlink(missing_ok=True)
 for name, target in [('init', 'sbin/init'), ('child', 'bin/child')]:
     shutil.copy2(a.upstream / 'prebuilt/userland' / name, root / target)
 for lib in (a.upstream / 'prebuilt/userland').glob('libhakios*.dylib'):
@@ -54,4 +57,5 @@ subprocess.run(['python3', 'tools/apfs/mkapfs.py', '-z', '--plain', 'fw',
     'system': 'existing userland/system.apfs, unchanged', 'hardware_verified': False,
     'helper_sha256': hashlib.sha256((a.output / 'root.apfs').read_bytes()).hexdigest(),
     'gles_provenance': (a.gles_dir / 'PROVENANCE').read_text().strip() if a.gles_dir else None,
+    'demo_disabled': a.no_demo,
 }, indent=2) + '\n')

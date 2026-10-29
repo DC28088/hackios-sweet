@@ -2,7 +2,7 @@ name: Pinned HakiOS kernel for Sweet bringup
 on:
   push:
     branches: [codex/hakios-refresh-20261029]
-    paths: [.github/workflows/hakios-current.yml, ports/sweet/patch-current-kernel.py]
+    paths: [.github/workflows/hakios-current.yml, ports/sweet/patch-current-kernel.py, 'ports/sweet/input/**']
   workflow_dispatch:
 permissions:
   contents: read
@@ -30,6 +30,7 @@ jobs:
           mkdir -p out/hakios-current
           python3 ports/sweet/patch-current-kernel.py upstream-current
           sha256sum ports/sweet/patch-current-kernel.py > out/hakios-current/SWEET_PATCH.sha256
+          sha256sum ports/sweet/input/*.c > out/hakios-current/SWEET_INPUT.sha256
           cd upstream-current
           xnu/apply.sh
           xnu-deps/setup.sh
