@@ -1,3 +1,25 @@
+## Corrected input kernel: regulator vote and Goodix detection pass (2026-10-29)
+
+CI40869721439/08c2e6e passed. Verified kernel and all source manifests:
+out/hakios-20261029/kernel-sweet-input2/mach.development.bcm2837,
+SHA0d1d544d7de84b94c63ae2932bed00684c49d2054c47b14886c244a0058de57f.
+Current profile selects it with the same benchmark-free helper. Asked old
+session to stop via ./xl stop; it returned cleanly with642159 log bytes,
+logs/172639-run.log. Screenshot ios-input-first-home.png actually captures
+the dim lock screen; user earlier reported home. Key events for actual power
+and volume-down presses were posted; user says no reliable response, so
+full button behavior not yet qualified.
+
+Reused the same resident loader/system APFS after clean return (no reflash
+or reupload). Host session45604, logs/173540-run.log.live, duration900s.
+New touch trace: empty ACTIVE TCS1 normalized, L11C3-command vote done=1,
+status0/1/2=0x10101, then Goodix PID9896, firmware03.02.00.0b read successfully;
+FocalTech correctly NACKs. Selected GT9896 Yellowstone at1080x2400, poll10ms.
+No touch sample claim yet. Asked user to swipe/tap/press keys once UI appears;
+keep live USB capture and check tl: p / tl: i alongside actual screen result.
+Wi-Fi, BT, brightness, battery and GPU hardware migration still pending.
+No partition writes; original working HFS+ installation remains intact.
+
 ## Input hardware result: keys post; touch blocked by inherited TCS mode (2026-10-29)
 
 Temporary input run logs/172639-run.log.live: keys find PMIC arbiter v5,
