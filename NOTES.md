@@ -1,3 +1,24 @@
+## A618 step 1c: GMU cold boot and HFI handshake verified (2026-10-29)
+
+Stages 7-8 in ports/sweet/input/sweet_gpu_boot.c (SMMU/HFI/GMU bodies verbatim
+from ios-sweet 0095/0097/0094; allocator for this kernel: kmem_alloc_contig +
+ml_io_map_unmappable(VM_WIMG_WCOMB), 80 KiB, 16 KiB aligned). Kernel CI40895661062
+(commit after da25a3d) SUCCESS, SHA256
+57c7fa8f520cc0083bf987622741a3b95ec6efc017497d125ac925881c7b1998 in
+out/hakios-20261029/kernel-sweet-gpu8. Requested straight to sweetgpu=8 by user.
+HARDWARE RESULT (boot logs/204039-run.log.live, BOOTARGS + sweetgpu=8): stages
+4-6 as before; DMA PA=0x19d178000 uncached; HFI table at IOVA 0x60004000; SMMU CB1
+stream slot 0 SMR=0x80000005, translated=16 + guard fault; MIN_SVS votes
+GPU=GMU=0x400202; GMU released: errno=0 phase=6 FW=0x10110000; HFI request=0x500105
+response=0x500005 fw_error=0 packets=5, queues drained, 0 dropped, CB1 FSR 0x400
+(metadata bit only). Same values/phase as the original's 0098 record. No panic,
+no reset, UI stayed up.
+Warning: nothing stops the GMU again. A second sweetgpu run in the same loader
+session finds SYSRESET!=1 and refuses (stage 6 EBUSY). Reset the phone between
+runs. Not done: GX power through the GMU, SMMU context for the GPU core (CB0),
+zap/SQE, ring, first command (ios-sweet 0096-0106 CP backend), rendering. GPU
+acceleration NOT established.
+
 ## A618 step 1b: GMU clocks and firmware staging verified (2026-10-29)
 
 Stages 5-6 added to ports/sweet/input/sweet_gpu.c (ios-sweet patches 0089-0091:
