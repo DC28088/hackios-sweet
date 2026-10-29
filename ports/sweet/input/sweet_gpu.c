@@ -503,18 +503,10 @@ gpu_arc_tables(void)
 }
 
 static void
-gpu_thread(void *arg, wait_result_t result)
+gpu_work(int stage)
 {
 	static const char *const names[] = { "mx.lvl", "cx.lvl", "gfx.lvl" };
-	uint64_t deadline;
-	int stage = gpu_stage;
-	(void)arg;
-	(void)result;
 
-	/* Touch votes L11C at 45 s; RPMh is shared, so this waits longer. */
-	clock_interval_to_deadline(60, NSEC_PER_SEC, &deadline);
-	(void)assert_wait_deadline(&gpu_sleep_chan, THREAD_UNINT, deadline);
-	thread_block(THREAD_CONTINUE_NULL);
 	if (stage >= 4) {
 		uint32_t control, status;
 		unsigned waited;
@@ -524,7 +516,7 @@ gpu_thread(void *arg, wait_result_t result)
 		}
 		if (error) {
 			printf("SWEET ADRENO: CX preconditions failed errno=%d; no GPUCC write\n", error);
-			goto out;
+			return;
 		}
 		printf("SWEET ADRENO: CX power starting; no GPU core access\n");
 		error = gpu_enable_cx(&control, &status, &waited);
@@ -534,7 +526,7 @@ gpu_thread(void *arg, wait_result_t result)
 			error = gpu_gmu_prepare(stage);
 			printf("SWEET ADRENO: GMU stage=%d finished errno=%d; rendering unavailable\n", stage, error);
 		}
-		goto out;
+		return;
 	}
 	if (stage == 3) {
 		printf("SWEET GPU: ARC gfx raise starting; mx/cx read-only\n");
@@ -543,16 +535,16 @@ gpu_thread(void *arg, wait_result_t result)
 			if (error) {
 				printf("SWEET GPU: ARC gfx raise stopped at %s errno=%d; no retry\n",
 				    names[i], error);
-				goto out;
+				return;
 			}
 		}
 		int error = sweet_rpmh_arc_raise("gfx.lvl", SWEET_GPU_GFX_TARGET);
 		if (error) {
 			printf("SWEET GPU: ARC gfx raise stopped errno=%d; no retry\n", error);
-			goto out;
+			return;
 		}
 		printf("SWEET GPU: ARC gfx raise complete; GPUCC power/clock writes remain disabled\n");
-		goto out;
+		return;
 	}
 	printf("SWEET GPU: ARC readback starting; no resource votes\n");
 	for (unsigned i = 0; i < 3; ++i) {
@@ -560,11 +552,24 @@ gpu_thread(void *arg, wait_result_t result)
 		if (error) {
 			printf("SWEET GPU: ARC readback stopped at %s errno=%d; no retry\n",
 			    names[i], error);
-			goto out;
+			return;
 		}
 	}
 	printf("SWEET GPU: ARC readback complete; power/clock writes remain disabled\n");
-out:
+}
+
+static void
+gpu_thread(void *arg, wait_result_t result)
+{
+	uint64_t deadline;
+	(void)arg;
+	(void)result;
+
+	/* Touch votes L11C at 45 s; RPMh is shared, so this waits longer. */
+	clock_interval_to_deadline(60, NSEC_PER_SEC, &deadline);
+	(void)assert_wait_deadline(&gpu_sleep_chan, THREAD_UNINT, deadline);
+	thread_block(THREAD_CONTINUE_NULL);
+	gpu_work(gpu_stage);
 	(void)thread_terminate(current_thread());
 	thread_block(THREAD_CONTINUE_NULL);
 }
@@ -580,7 +585,15 @@ sweet_gpu_probe(void)
 	}
 	gpu_probe_attempted = 1;
 	(void)PE_parse_boot_argn("sweetgpu", &enabled, sizeof(enabled));
-	if (enabled < 1 || enabled > 9) {
+	{
+		int hakios = 0;
+
+		/* gpu=1 is HakiOS's name for "draw with the GPU": here, stage 10 (stage 9, then the service HakiosGPU) */
+		if (enabled == 0 && PE_parse_boot_argn("gpu", &hakios, sizeof(hakios)) && hakios == 1) {
+			enabled = 10;
+		}
+	}
+	if (enabled < 1 || enabled > 10) {
 		return;
 	}
 	printf("SWEET GPU: GPUCC audit at %#x; stage=%d, no GMU access\n", SWEET_GPUCC_PA, enabled);
@@ -616,6 +629,12 @@ sweet_gpu_probe(void)
 	}
 	if (enabled == 1) {
 		printf("SWEET GPU: read-only audit complete; sweetgpu=2 reads ARC resources, 3 raises gfx.lvl, 4 powers CX, 5 GMU clocks, 6 firmware staging\n");
+		return;
+	}
+	if (enabled == 10) {
+		/* The service HakiosGPU must exist before the first program runs (inject.c opengl_es()): no waiting.
+		 * Touch's RPMh vote comes 45 s after boot, long after this. */
+		gpu_work(enabled);
 		return;
 	}
 	gpu_stage = enabled;

@@ -1324,6 +1324,23 @@ a618_cp_start(const struct a618_io *gpu, const struct a618_io *gmu,
  write_address(gpu, UCHE_TRAP_BASE, 0x1fffffffff000ull);
  write_address(gpu, UCHE_WRITE_THRU_BASE, 0x1fffffffff000ull);
  cp_snapshot(gpu, result, "config");
+ {
+  /* What Linux's a6xx hw_init writes for the A618 besides the above: 64-bit addresses in every block, QoS,
+   * performance counters, the GMEM range, prim FIFO threshold and hang detection. UBWC stays at the
+   * hardware defaults ("a618 is using the hw default values"), as does clock gating. */
+  static const uint32_t address_modes[] = { 0x0c01, 0x8601, 0x8e05, 0x9e01, 0xbe05, 0xa601, 0x9601, 0x0e00, 0xae01,
+      0xb601, 0xf810 };
+  for (unsigned i = 0; i < sizeof(address_modes) / sizeof(address_modes[0]); ++i)
+   gpu->write(gpu->cookie, 4 * address_modes[i], 1);
+  gpu->write(gpu->cookie, 4 * 0x0010, 3); /* RBBM_VBIF_CLIENT_QOS_CNTL */
+  gpu->write(gpu->cookie, 4 * 0x050b, 0xffffffffu); /* RBBM_PERFCTR_GPU_BUSY_MASKED */
+  write_address(gpu, 4 * 0x0e0b, 0x100000); /* UCHE_GMEM_RANGE_MIN */
+  write_address(gpu, 4 * 0x0e0d, 0x100000 + 512 * 1024 - 1); /* UCHE_GMEM_RANGE_MAX */
+  gpu->write(gpu->cookie, 4 * 0x9e00, 0x00180000); /* PC_DBG_ECO_CNTL: a618 prim_fifo_threshold */
+  gpu->write(gpu->cookie, 4 * 0x0500, 1); /* RBBM_PERFCTR_CNTL */
+  gpu->write(gpu->cookie, 4 * 0x001f, (1u << 30) | 0x1fffff); /* RBBM_INTERFACE_HANG_INT_CNTL */
+  gpu->write(gpu->cookie, 4 * 0x0e19, (1u << 7) | 1); /* UCHE_CLIENT_PF */
+ }
  /* Hardware protections remain enabled; only kernel-built PM4 is submitted. */
  static const uint32_t protect[32] = {
   0x13fc0000,
@@ -1513,6 +1530,344 @@ io_delay(void *cookie, unsigned usec)
 	delay(usec);
 }
 
+/* ================================ stage 10: the GPU for the system to draw with ================================ */
+
+/*
+ * What iokit/Kernel/hakios.gpu.cpp (the service HakiosGPU, speaking Linux's msm interface to Mesa's freedreno)
+ * asks of the kernel side: addresses in the 3D core's SMMU context, mappings, a ring with fences. Upstream's
+ * hakios.adreno.c answers for the Redwood phone's A642L; here the same functions are answered for the
+ * Adreno 618 that stage 9 started (the upstream ones are made weak by patch-current-kernel.py).
+ * Differences from the A642L: the page tables are those of CB0 (4 GB of address space, 4 K pages), the ring
+ * is the one of stage 9 with its read position in a memory word (WHERE_AM_I), and no GMU message is sent to
+ * stop it: a run's end leaves the GMU running (reset the phone between runs).
+ */
+#define HK_VA_START 0x80000000ull
+#define HK_VA_SIZE 0x80000000ull
+#define HK_RING_WORDS 8192u
+#define HK_PTE_CORE ((2ull << 8) | (1ull << 10) | (1ull << 11) | (1ull << 6) | 3ull)
+#define HK_PTE_READ_ONLY (1ull << 7)
+#define HK_POOL_CHUNKS 64
+
+static struct {
+	int ready;
+	vm_offset_t core, smmu, gmu;
+	struct a618_dma_region *mem;
+	struct a618_cp_result *cp;
+	uint32_t fence;
+	volatile uint64_t *l2[4];
+	volatile uint64_t *l3[4][512];
+	struct a618_dma_region pool[HK_POOL_CHUNKS];
+	unsigned pool_chunks, pool_used;
+	struct {
+		uint64_t start, size;
+	} free_list[1024];
+	unsigned free_count;
+} hk;
+
+/* A zeroed 4 K table the SMMU's walker reads without this processor's cache: from the uncached pool. */
+static volatile uint64_t *
+hk_table(uint64_t *phys)
+{
+	if (hk.pool_chunks == 0 || hk.pool_used == 16) {
+		if (hk.pool_chunks == HK_POOL_CHUNKS || sweet_adreno_dma_allocate(&hk.pool[hk.pool_chunks], 0x10000)) {
+			return NULL;
+		}
+		hk.pool_chunks++;
+		hk.pool_used = 0;
+	}
+	struct a618_dma_region *chunk = &hk.pool[hk.pool_chunks - 1];
+
+	*phys = chunk->physical + 0x1000ull * hk.pool_used;
+	return (volatile uint64_t *)(chunk->cpu + 0x1000ull * hk.pool_used++);
+}
+
+bool
+hakios_gpu_ready(void)
+{
+	return hk.ready;
+}
+
+bool
+hakios_gpu_parameter(uint32_t which, uint64_t *value)
+{
+	switch (which) {
+	case 0x01: case 0x06: case 0x08: case 0x09: case 0x0a: case 0x11:
+		*value = 0;
+		return true;
+	case 0x02:
+		*value = 512 * 1024;
+		return true;
+	case 0x03:
+		*value = 0x06010800ull;         /* the A618's chip ID (a6xx_catalog.c) */
+		return true;
+	case 0x04:
+		*value = 180000ull * 1000;
+		return true;
+	case 0x05:
+		*value = mach_absolute_time();
+		return true;
+	case 0x07:
+		*value = 1;
+		return true;
+	case 0x10:
+		*value = 14;
+		return true;
+	case 0x12:
+		*value = 6;
+		return true;
+	case 0x13:
+		*value = 1;
+		return true;
+	default:
+		return false;
+	}
+}
+
+uint64_t
+hakios_gpu_address(uint64_t size)
+{
+	size = (size + 0xffff) & ~0xffffull;
+	for (unsigned i = 0; i < hk.free_count; i++) {
+		if (hk.free_list[i].size >= size) {
+			uint64_t address = hk.free_list[i].start;
+
+			hk.free_list[i].start += size;
+			hk.free_list[i].size -= size;
+			if (hk.free_list[i].size == 0) {
+				memmove(&hk.free_list[i], &hk.free_list[i + 1], (--hk.free_count - i) * sizeof(hk.free_list[0]));
+			}
+			return address;
+		}
+	}
+	return 0;
+}
+
+void
+hakios_gpu_address_free(uint64_t address, uint64_t size)
+{
+	unsigned at;
+
+	size = (size + 0xffff) & ~0xffffull;
+	for (at = 0; at < hk.free_count && hk.free_list[at].start < address; at++) {
+	}
+	if (at > 0 && hk.free_list[at - 1].start + hk.free_list[at - 1].size == address) {
+		hk.free_list[at - 1].size += size;
+		if (at < hk.free_count && address + size == hk.free_list[at].start) {
+			hk.free_list[at - 1].size += hk.free_list[at].size;
+			memmove(&hk.free_list[at], &hk.free_list[at + 1], (--hk.free_count - at) * sizeof(hk.free_list[0]));
+		}
+	} else if (at < hk.free_count && address + size == hk.free_list[at].start) {
+		hk.free_list[at].start = address;
+		hk.free_list[at].size += size;
+	} else if (hk.free_count < sizeof(hk.free_list) / sizeof(hk.free_list[0])) {
+		memmove(&hk.free_list[at + 1], &hk.free_list[at], (hk.free_count++ - at) * sizeof(hk.free_list[0]));
+		hk.free_list[at].start = address;
+		hk.free_list[at].size = size;
+	}
+}
+
+/* One 4 K page of ours at an address of the core's (phys 0: no page). */
+bool
+hakios_gpu_map(uint64_t address, uint64_t phys, bool read_only)
+{
+	volatile uint64_t *l1 = (volatile uint64_t *)hk.mem->cpu;
+	unsigned i1 = (unsigned)(address >> 30), i2 = (unsigned)(address >> 21) & 511, i3 = (unsigned)(address >> 12) & 511;
+	uint64_t table;
+
+	if (!phys && (!hk.ready || !hk.l2[(unsigned)(address >> 30) & 3] ||
+	    !hk.l3[(unsigned)(address >> 30) & 3][(unsigned)(address >> 21) & 511])) {
+		return true;                    /* nothing there to take away */
+	}
+	if (!hk.ready || address < HK_VA_START || address >= HK_VA_START + HK_VA_SIZE || (address & 0xfff)) {
+		return false;
+	}
+	if (!hk.l2[i1]) {
+		if (!(hk.l2[i1] = hk_table(&table))) {
+			return false;
+		}
+		l1[i1] = table | 3;
+	}
+	if (!hk.l3[i1][i2]) {
+		if (!(hk.l3[i1][i2] = hk_table(&table))) {
+			return false;
+		}
+		hk.l2[i1][i2] = table | 3;
+	}
+	hk.l3[i1][i2][i3] = phys ? (phys | HK_PTE_CORE | (read_only ? HK_PTE_READ_ONLY : 0)) : 0;
+	return true;
+}
+
+void
+hakios_gpu_mapped(void)
+{
+	__asm__ volatile("dsb sy" ::: "memory");
+}
+
+void
+hakios_gpu_unmap(uint64_t address, uint64_t size)
+{
+	for (uint64_t offset = 0; offset < size; offset += 4096) {
+		(void)hakios_gpu_map(address + offset, 0, false);
+	}
+	__asm__ volatile("dsb sy" ::: "memory");
+	io32_write((void *)hk.smmu, 0x8000 + 0x610, 0x62);
+	io32_write((void *)hk.smmu, 0x8000 + 0x7f0, 1);
+	for (int i = 0; i < 1000 && (io32_read((void *)hk.smmu, 0x8000 + 0x7f4) & 1); i++) {
+	}
+}
+
+/* Memory that the core and a program see without this processor's cache in between: out of that cache. */
+void
+hakios_gpu_to_memory(void *start, uint64_t size)
+{
+	for (vm_offset_t line = (vm_offset_t)start & ~(vm_offset_t)63; line < (vm_offset_t)start + size; line += 64) {
+		__asm__ volatile("dc civac, %0" : : "r" (line));
+	}
+	__asm__ volatile("dsb sy" ::: "memory");
+}
+
+bool
+hakios_gpu_done(uint32_t fence)
+{
+	volatile uint32_t *word = (volatile uint32_t *)(hk.mem->cpu + A618_CP_FENCE_OFFSET);
+
+	__asm__ volatile("dmb oshld" ::: "memory");
+	return (int32_t)(*word - fence) >= 0;
+}
+
+uint32_t
+hakios_gpu_last(void)
+{
+	return hk.fence;
+}
+
+void
+hakios_gpu_worked(uint64_t *microseconds, uint32_t *submissions, uint32_t by[7])
+{
+	*microseconds = 0;
+	*submissions = 0;
+	bzero(by, 7 * sizeof(uint32_t));
+}
+
+uint32_t
+hakios_gpu_submit(const uint64_t *addresses, const uint32_t *words, uint32_t count)
+{
+	struct a618_cp_result *cp = hk.cp;
+	volatile uint32_t *shadow = (volatile uint32_t *)(hk.mem->cpu + A618_CP_SHADOW_OFFSET);
+	volatile uint32_t *ring = (volatile uint32_t *)(hk.mem->cpu + A618_CP_RING_OFFSET);
+	const struct a618_io gpu = { (void *)hk.core, io32_read, io32_write, io_delay };
+	const struct a618_io gmu = { (void *)hk.gmu, io32_read, io32_write, io_delay };
+	uint32_t wanted = 16 + 4 * count, room = 0, at, n = 0;
+
+	if (!hk.ready || cp->poisoned || count > 1000) {
+		return 0;
+	}
+	for (int i = 0; i < 20000; i++) {
+		__asm__ volatile("dmb oshld" ::: "memory");
+		uint32_t rptr = *shadow;
+
+		room = (rptr + HK_RING_WORDS - cp->wptr - 1) % HK_RING_WORDS;
+		if (rptr < HK_RING_WORDS && room >= wanted) {
+			break;
+		}
+		room = 0;
+		delay(100);
+	}
+	if (!room) {
+		return 0;
+	}
+	if (++hk.fence == 0) {
+		hk.fence = 1;
+	}
+	at = cp->wptr;
+#define PUT(w) (ring[at++ % HK_RING_WORDS] = (w), n++)
+	PUT(cp_packet7(0x46, 1));
+	PUT(0x18);                              /* INVALIDATE_DEPTH */
+	PUT(cp_packet7(0x46, 1));
+	PUT(0x19);                              /* INVALIDATE_COLOR */
+	for (uint32_t i = 0; i < count; i++) {
+		PUT(cp_packet7(0x3f, 3));
+		PUT((uint32_t)addresses[i]);
+		PUT((uint32_t)(addresses[i] >> 32));
+		PUT(words[i]);
+	}
+	PUT(cp_packet7(0x46, 4));
+	PUT(4u | (1u << 31));                   /* CACHE_FLUSH_TS */
+	PUT(A618_CP_FENCE_IOVA);
+	PUT(0);
+	PUT(hk.fence);
+	PUT(cp_packet7(0x62, 2));               /* WHERE_AM_I: the read position, for the next room */
+	PUT(A618_CP_SHADOW_IOVA);
+	PUT(0);
+#undef PUT
+	__asm__ volatile("dsb sy" ::: "memory");
+	cp->wptr = at % HK_RING_WORDS;
+	gpu.write(gpu.cookie, 0x201c, cp->wptr);
+	/* The GMU drops a write to the core while its fence is closed: write again (stage 9's rule). */
+	for (unsigned us = 0; us < 1000; us += 10) {
+		if (!(gmu.read(gmu.cookie, A618_GMU_AHB_FENCE_STATUS) & 1)) {
+			break;
+		}
+		delay(10);
+		gpu.write(gpu.cookie, 0x201c, cp->wptr);
+	}
+	return hk.fence;
+}
+
+void
+hakios_gpu_report(const char *why)
+{
+	const struct a618_io gpu = { (void *)hk.core, io32_read, io32_write, io_delay };
+
+	printf("SWEET ADRENO: gpu: %s: submission %u is the last, the core has done %u; ring: read up to %u, written up to %u; "
+	    "status %#x, interrupts %#x, CP fault %#x, CP interrupts %#x\n", why, hk.fence,
+	    *(volatile uint32_t *)(hk.mem->cpu + A618_CP_FENCE_OFFSET), *(volatile uint32_t *)(hk.mem->cpu + A618_CP_SHADOW_OFFSET),
+	    hk.cp->wptr, gpu.read(gpu.cookie, 0x840), gpu.read(gpu.cookie, 0x804), gpu.read(gpu.cookie, 0x2084),
+	    gpu.read(gpu.cookie, 0x208c));
+	printf("SWEET ADRENO: gpu:   CB0 FSR=%#x FAR=%#llx FSYNR0=%#x\n", io32_read((void *)hk.smmu, 0x8058),
+	    io64_read((void *)hk.smmu, 0x8060), io32_read((void *)hk.smmu, 0x8068));
+}
+
+void
+hakios_gpu_stop(void)
+{
+	/* The core is not powered down (no GMU shutdown here): it only stops taking work. */
+	hk.ready = 0;
+}
+
+void hakios_adreno_init(void) {}
+void hakios_adreno_quiesce(void) {}
+void hakios_adreno_minute(void) {}
+extern void HakiosGPUStop(void);
+extern void HakiosGPUStart(void);
+void
+hakios_adreno_stop(void)
+{
+	if (hk.ready) {
+		HakiosGPUStop();
+	}
+}
+
+/* Stage 10: after stage 9, hand the core to the system. */
+static void
+sweet_gpu_keep(vm_offset_t core, vm_offset_t smmu, vm_offset_t gmu, struct a618_dma_region *memory,
+    struct a618_cp_result *cp)
+{
+	bzero(&hk, sizeof(hk));
+	hk.core = core;
+	hk.smmu = smmu;
+	hk.gmu = gmu;
+	hk.mem = memory;
+	hk.cp = cp;
+	hk.fence = 1;                           /* the test of stage 9 wrote 1 */
+	hk.free_list[0].start = HK_VA_START;
+	hk.free_list[0].size = HK_VA_SIZE;
+	hk.free_count = 1;
+	hk.ready = 1;
+	printf("SWEET ADRENO: THE GPU STAYS ON for the system to draw with: the service HakiosGPU (A618, 180 MHz)\n");
+	HakiosGPUStart();
+}
+
 static uint32_t
 cp_crc32(const uint8_t *p, unsigned n)
 {
@@ -1565,9 +1920,10 @@ cp_zap_prepare(void *cookie)
 /* Stage 9, after the GMU is up: the SQE, the CP's own SMMU context, the signed zap shader, ME_INIT and
  * one fence write (sweet_gpu_cp_start of patch 0106, which reached phase 6 on 2026-10-20). */
 static int
-sweet_gpu_cp_start(vm_offset_t gmu, vm_offset_t smmu)
+sweet_gpu_cp_start(unsigned stage, vm_offset_t gmu, vm_offset_t smmu)
 {
 	static struct a618_dma_region memory, metadata;
+	static struct a618_cp_result cp;
 	const uint8_t *sqe, *mdt, *code;
 	const uint64_t zap_base = 0x97f15000ull;
 	const uint32_t zap_size = 0x2000;
@@ -1634,7 +1990,6 @@ sweet_gpu_cp_start(vm_offset_t gmu, vm_offset_t smmu)
 		.reserved = (volatile uint32_t *)zap, .physical = zap_base, .metadata = &metadata,
 		.mdt = mdt, .code = code, .mdt_bytes = 0x1acc, .code_bytes = 0x7c0,
 	};
-	struct a618_cp_result cp;
 	bzero(&cp, sizeof(cp));
 	printf("SWEET ADRENO: starting the command processor now\n");
 	error = a618_cp_start(&gpu_io, &gmu_io, &memory, sqe, 32136, io_barrier, NULL, cp_zap_prepare, &request, &cp);
@@ -1686,6 +2041,9 @@ sweet_gpu_cp_start(vm_offset_t gmu, vm_offset_t smmu)
 	    error, cp.phase, cp.submitted, cp.completed, cp.rptr, cp.wptr, cp.interrupt, cp.hw_fault, cp.fence,
 	    cp.value);
 	printf("SWEET ADRENO: CP bootstrap complete errno=%d; no renderer, GPU acceleration not established\n", error);
+	if (!error && stage >= 10) {
+		sweet_gpu_keep(core, smmu, gmu, &memory, &cp);
+	}
 	return error;
 }
 
@@ -1768,7 +2126,7 @@ sweet_gpu_boot(unsigned stage, vm_offset_t gpucc, vm_offset_t gmu_base, vm_offse
 		    q, qh[0], qh[5], qh[8], qh[9], qh[10], qh[11]);
 	}
 	if (!error && stage >= 9) {
-		error = sweet_gpu_cp_start(gmu_base, smmu_base);
+		error = sweet_gpu_cp_start(stage, gmu_base, smmu_base);
 	}
 	return error;
 }

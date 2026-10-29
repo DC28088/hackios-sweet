@@ -84,3 +84,15 @@ s = s.replace(old, '''\tuint32_t sweet = 0;
 \t}''')
 f.write_text(s)
 print('Integrated Sweet keys, GENI I2C touch and L11C RPMh with HakiOS input queue.')
+
+# The upstream Adreno driver answers for the Redwood phone's A642L; Sweet's A618 driver (sweet_gpu_boot.c)
+# defines the same functions. The upstream ones become weak so that the linker takes ours.
+f = target / 'hakios.adreno.c'
+s = f.read_text()
+symbols = ['hakios_adreno_init', 'hakios_adreno_quiesce', 'hakios_adreno_stop', 'hakios_adreno_minute',
+           'hakios_gpu_stop', 'hakios_gpu_ready', 'hakios_gpu_parameter', 'hakios_gpu_address',
+           'hakios_gpu_address_free', 'hakios_gpu_map', 'hakios_gpu_mapped', 'hakios_gpu_unmap',
+           'hakios_gpu_to_memory', 'hakios_gpu_done', 'hakios_gpu_last', 'hakios_gpu_worked',
+           'hakios_gpu_submit', 'hakios_gpu_report']
+f.write_text(''.join('#pragma weak %s\n' % name for name in symbols) + s)
+print('Made the upstream A642L GPU entry points weak; Sweet defines its own.')
