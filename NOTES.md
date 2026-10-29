@@ -1,3 +1,37 @@
+## Sweet timer routing correction (2026-10-29)
+
+A concrete generic-kernel mismatch was found: upstream gic_v3_irq.c hardcodes
+virtual timer INTID27; original Sweet shim and 0004-sweet-machine-config.patch
+prove this phone uses INTID19 (DT PPI3). Added a validated gic_vtimer boot arg,
+default27, applied before boot-CPU interrupt enable and shared with secondary
+CPU initialization and the IRQ dispatch path. Sweet boot must pass gic_vtimer=19.
+The CI workflow applies this patch before xnu/apply.sh and records its hash.
+
+The rebuilt generic kernel has not yet launched: revised loader started but
+APFS upload lost USB. User reports UEFI/Project Silicium text still displayed;
+this latest event does not establish a phone reset. Need FASTBOOT to restart
+loader after building the timer correction. Do not confuse this with the
+first attempt, where user explicitly reported reset. No kernel live log yet.
+
+## Pinned source build succeeded (2026-10-29)
+
+CI40805130176 (0bf18cb) passed using XNU's kernel `build` target.
+Verified kernel SHA256 5cf38782067f1b1357936a25cd44782712b940156e0cc3dd4811e1dab6234fa3.
+Loader CI40805161464 passed; SHA256
+52bb08281adbfdcd47387e8bb5b34e742122925f04f922844a240d5d39253d06.
+Packaged out/hakios-20261029/hakios-sweet-current.img (8,046,592 bytes), SHA256
+a4785313f2fb744bb2f097256b749437293288144b2658b5fd974a378042b71d.
+This is a resident loader/kernel container, requiring separate APFS RAM upload.
+Kernel is current generic HakiOS, not yet a fully adapted A618/peripheral port.
+Original Sweet UEFI retained; its Project Silicium banner is expected.
+
+Prepared kernel boot args: -v bootcpu=7 gpu=0 (omit optional cpus enumeration).
+All artifacts and logs in out/hakios-20261029 and logs/ remain ignored.
+A host launch was interrupted by updating xl while Bash was reading it;
+file passes syntax parsing and launch was restarted after the edit completed.
+Do not edit an executing shell script in place. No phone write from that
+interrupted launch occurred. Hardware result of the new boot is still pending.
+
 ## First refreshed-kernel attempt and follow-up (2026-10-29)
 
 Current upstream prebuilt SHA03e794e8 boot attempted with gpu=0 cpus=1
