@@ -299,16 +299,25 @@ rh_arc_levels(const struct rh_res *res, uint32_t *level, unsigned *count)
 }
 
 static bool
-rh_free(unsigned t)
+rh_empty_active(unsigned t)
 {
 	uint32_t b = t * RH_TCS_STRIDE;
-	/* Idle alone is insufficient: a sleep/wake payload can be armed and idle. */
-	return rh_read(rh_tcs, b + RH_STATUS) != 0 &&
-	    rh_read(rh_tcs, b + RH_STATUS) != 0xffffffffu &&
-	    rh_read(rh_tcs, b + RH_CONTROL) == 0 &&
+	uint32_t control = rh_read(rh_tcs, b + RH_CONTROL);
+	/* Only ACTIVE slots, no commands, waits, pending completion or trigger.
+	 * Sweet UEFI leaves AMC_EN set on otherwise empty TCS1. HakiOS's GENI
+	 * driver clears that mode before loading a new request; it is not BUSY.
+	 * Populated TCS0 and every sleep/wake slot remain untouched. */
+	return t < RH_ACTIVE_N && rh_read(rh_tcs, b + RH_STATUS) == 1 &&
+	    (control == 0 || control == RH_AMC_EN) &&
 	    rh_read(rh_tcs, b + RH_ENABLE) == 0 &&
 	    rh_read(rh_tcs, b + RH_WAIT) == 0 &&
 	    !(rh_read(rh_tcs, RH_IRQ_STATUS) & (1u << t));
+}
+
+static bool
+rh_free(unsigned t)
+{
+	return rh_empty_active(t) && rh_read(rh_tcs, t * RH_TCS_STRIDE + RH_CONTROL) == 0;
 }
 
 /* No GIC writes: this polled controller has no registered IRQ handler.
@@ -369,7 +378,7 @@ rh_send_cmds(const char *res, uint32_t address, uint32_t align_mask,
 				return EBUSY;
 			}
 		}
-		if (chosen < 0 && rh_free(t)) {
+		if (chosen < 0 && rh_empty_active(t)) {
 			chosen = (int)t;
 		}
 	}
@@ -380,6 +389,17 @@ rh_send_cmds(const char *res, uint32_t address, uint32_t align_mask,
 	unsigned t = (unsigned)chosen;
 	uint32_t b = t * RH_TCS_STRIDE, bit = 1u << t;
 	uint32_t enable = (1u << n) - 1u;
+	/* Recheck the empty slot before changing its AMC mode. No trigger or
+	 * command storage is touched until the resulting idle state is verified. */
+	if (!rh_empty_active(t)) {
+		return EBUSY;
+	}
+	if (rh_read(rh_tcs, b + RH_CONTROL) == RH_AMC_EN) {
+		printf("SWEET RPMH: empty ACTIVE TCS%u: clearing inherited AMC mode\n", t);
+		if (!rh_sync(b + RH_CONTROL, 0) || !rh_free(t)) {
+			return EBUSY;
+		}
+	}
 	uint32_t irq_en = rh_read(rh_tcs, RH_IRQ_EN);
 	const bool poll_latch = strcmp(res, "ldoc11") != 0;
 	if (irq_en == 0xffffffffu || !rh_free(t) || (poll_latch && !rh_poll_delivery_disabled())) {

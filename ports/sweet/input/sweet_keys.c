@@ -103,6 +103,9 @@ static void
 keys_thread(void *arg, wait_result_t result)
 {
 	int state[3] = {0, 0, 0};
+	int candidate[3] = {0, 0, 0};
+	unsigned samples[3] = {0, 0, 0};
+	bool released[3] = {false, false, false};
 	unsigned errors = 0;
 	(void)arg;
 	(void)result;
@@ -120,7 +123,22 @@ keys_thread(void *arg, wait_result_t result)
 			errors = 0;
 		}
 		for (int k = 0; k < 3; ++k) {
-			if ((k == 1 ? gok : pok) && now[k] != state[k]) {
+			if (!(k == 1 ? gok : pok)) {
+				samples[k] = 0;
+				continue;
+			}
+			if (!now[k]) {
+				released[k] = true;
+			}
+			if (candidate[k] != now[k]) {
+				candidate[k] = now[k];
+				samples[k] = 1;
+			} else if (samples[k] < 2) {
+				++samples[k];
+			}
+			/* Reject one-sample bus/pin transients and a key never released
+			 * since boot, as HakiOS's existing button driver does. */
+			if (released[k] && samples[k] >= 2 && now[k] != state[k]) {
 				state[k] = now[k];
 				printf("SWEET KEYS: key=%d down=%d pon=%#x gpio4:c110=%#x\n",
 				    k, state[k], pon, gpio);
