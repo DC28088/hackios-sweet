@@ -557,7 +557,11 @@ touch_se_init(void)
 static void
 touch_thread(void *arg, wait_result_t result)
 {
-	unsigned delay_s = 45;
+	unsigned delay_s = 45, gpu = 0;
+	/* The GPU (gpu=1) must be up before the first program runs and waits for this vote: start at once. */
+	if (PE_parse_boot_argn("gpu", &gpu, sizeof(gpu)) && gpu == 1) {
+		delay_s = 2;
+	}
 	(void)arg;
 	(void)result;
 	/*

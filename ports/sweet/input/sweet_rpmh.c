@@ -1028,3 +1028,10 @@ out:
 	return error;
 }
 #endif /* ARM64_BOARD_CONFIG_SWEET */
+
+/* The first RPMh transaction (touch's L11C) has gone through: later ones may follow. */
+bool
+sweet_rpmh_ready(void)
+{
+	return __atomic_load_n(&rh_touch_ready, __ATOMIC_ACQUIRE);
+}

@@ -39,6 +39,7 @@ extern int sweet_rpmh_arc_read(const char *res);
 extern int sweet_rpmh_arc_require(const char *res, unsigned minimum);
 extern int sweet_rpmh_arc_raise(const char *res, unsigned target_vlvl);
 extern kern_return_t thread_terminate(thread_t);
+extern bool sweet_rpmh_ready(void);
 extern int sweet_gpu_boot(unsigned stage, vm_offset_t gpucc, vm_offset_t gmu_base, vm_offset_t smmu_base);
 extern const uint8_t *hakios_image_file(const char *dir, const char *name, uint64_t *size, int *disk_out);
 void sweet_gpu_probe(void);
@@ -565,10 +566,19 @@ gpu_thread(void *arg, wait_result_t result)
 	(void)arg;
 	(void)result;
 
-	/* Touch votes L11C at 45 s; RPMh is shared, so this waits longer. */
-	clock_interval_to_deadline(60, NSEC_PER_SEC, &deadline);
-	(void)assert_wait_deadline(&gpu_sleep_chan, THREAD_UNINT, deadline);
-	thread_block(THREAD_CONTINUE_NULL);
+	/* Touch votes L11C at 45 s (2 s with gpu=1); RPMh is shared, so this waits longer. The service HakiosGPU
+	 * must exist before the first program runs (inject.c opengl_es()): stage 10 starts as soon as touch has voted. */
+	if (gpu_stage == 10) {
+		for (unsigned i = 0; i < 600 && !sweet_rpmh_ready(); ++i) {
+			clock_interval_to_deadline(100, NSEC_PER_MSEC, &deadline);
+			(void)assert_wait_deadline(&gpu_sleep_chan, THREAD_UNINT, deadline);
+			thread_block(THREAD_CONTINUE_NULL);
+		}
+	} else {
+		clock_interval_to_deadline(60, NSEC_PER_SEC, &deadline);
+		(void)assert_wait_deadline(&gpu_sleep_chan, THREAD_UNINT, deadline);
+		thread_block(THREAD_CONTINUE_NULL);
+	}
 	gpu_work(gpu_stage);
 	(void)thread_terminate(current_thread());
 	thread_block(THREAD_CONTINUE_NULL);
@@ -631,18 +641,12 @@ sweet_gpu_probe(void)
 		printf("SWEET GPU: read-only audit complete; sweetgpu=2 reads ARC resources, 3 raises gfx.lvl, 4 powers CX, 5 GMU clocks, 6 firmware staging\n");
 		return;
 	}
-	if (enabled == 10) {
-		/* The service HakiosGPU must exist before the first program runs (inject.c opengl_es()): no waiting.
-		 * Touch's RPMh vote comes 45 s after boot, long after this. */
-		gpu_work(enabled);
-		return;
-	}
 	gpu_stage = enabled;
 	thread_t thread;
 	kern_return_t kr = kernel_thread_start(gpu_thread, NULL, &thread);
 	if (kr == KERN_SUCCESS) {
 		thread_deallocate(thread);
-		printf("SWEET GPU: stage %d scheduled in 60 s\n", enabled);
+		printf("SWEET GPU: stage %d scheduled%s\n", enabled, enabled == 10 ? " after touch's RPMh vote" : " in 60 s");
 	} else {
 		printf("SWEET GPU: worker thread failed %d\n", kr);
 	}
