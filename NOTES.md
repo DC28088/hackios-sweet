@@ -1,3 +1,17 @@
+## Log review of 173540 run: touch and key events reach iOS (2026-10-29)
+
+Observation from logs/173540-run.log.live (device now absent from USB, so no
+new run): after Goodix selection the kernel posted "sample type 1/2 finger 0"
+records (e.g. 22411,355 -> 21318,4316; HakiOS-normalized coordinates, a
+vertical swipe) and backboardd logged "[TouchEvents] cancel clients due to
+system gesture stealing the touches", i.e. SpringBoard's gesture recognizer
+consumed a touch stream. SWEET KEYS posted key=0 down/up pairs (3 presses).
+Not yet confirmed: visible UI response (unlock/swipe) and Power lock behavior;
+the user must report that. Keys log only key=0 in this run (no Volume Down).
+Phone state: ./xl state reports "absent"; no adb/fastboot device. Next action
+once the phone is back in fastboot: ./xl enter, re-upload system if RAM lost,
+rerun with the same profile and check unlock swipe, then start battery/brightness.
+
 ## Corrected input kernel: regulator vote and Goodix detection pass (2026-10-29)
 
 CI40869721439/08c2e6e passed. Verified kernel and all source manifests:
