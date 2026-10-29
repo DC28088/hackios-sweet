@@ -236,9 +236,9 @@ flush_dcache(uint64_t start, uint64_t end)
 {
 	uint64_t line = 4ULL << ((READ_SYSREG(CTR_EL0) >> 16) & 0xF);
 	for (uint64_t p = start & ~(line - 1); p < end; p += line) {
-		__asm__ volatile ("dc civac, %0" : : "r" (p));
+		__asm__ volatile ("dc civac, %0" : : "r" (p) : "memory");
 	}
-	__asm__ volatile ("dsb sy");
+	__asm__ volatile ("dsb sy" : : : "memory");
 }
 
 static void
@@ -246,9 +246,9 @@ clean_dcache(uint64_t start, uint64_t end)
 {
 	uint64_t line = 4ULL << ((READ_SYSREG(CTR_EL0) >> 16) & 0xF);
 	for (uint64_t p = start & ~(line - 1); p < end; p += line) {
-		__asm__ volatile ("dc cvac, %0" : : "r" (p));
+		__asm__ volatile ("dc cvac, %0" : : "r" (p) : "memory");
 	}
-	__asm__ volatile ("dsb sy");
+	__asm__ volatile ("dsb sy" : : : "memory");
 }
 
 /* ------------------------------------------------------------------------ */
@@ -2247,7 +2247,7 @@ psci_call(uint64_t function, uint64_t a1, uint64_t a2, uint64_t a3)
 		register uint64_t x3 __asm__("x3") = a3;
 
 		__asm__ volatile ("hvc #0" : "+r" (x0), "+r" (x1), "+r" (x2), "+r" (x3)
-                        : : "x4", "x5", "x6", "x7", "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17");
+                        : : "x4", "x5", "x6", "x7", "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17", "memory");
 		status = (int64_t)x0;
 	} else {
 		smc_x3 = a3;
@@ -2417,7 +2417,7 @@ smc_call(uint64_t id, uint64_t a1, uint64_t a2, uint64_t *r1, uint64_t *r2)
 	register uint64_t x3 __asm__("x3") = smc_x3;
 
 	__asm__ volatile (".inst 0xd4000003" : "+r" (x0), "+r" (x1), "+r" (x2), "+r" (x3)
-                : : "x4", "x5", "x6", "x7", "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17");
+                : : "x4", "x5", "x6", "x7", "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17", "memory");
 	if (r1 != NULL) {
 		*r1 = x1;
 	}
@@ -2645,6 +2645,46 @@ static struct {
 	uint64_t base;
 	uint32_t width, height, stride;
 } SCREEN;
+/* Sweet handoff breadcrumb independent of UEFI console and USB callbacks.
+ * Two hexadecimal digits at the top left survive a stalled firmware callback. */
+static void
+boot_stage(uint32_t stage)
+{
+	static const uint8_t glyph[16][7] = {
+		{14,17,19,21,25,17,14}, {4,12,4,4,4,4,14},
+		{14,17,1,2,4,8,31}, {30,1,1,14,1,1,30},
+		{2,6,10,18,31,2,2}, {31,16,16,30,1,1,30},
+		{14,16,16,30,17,17,14}, {31,1,2,4,8,8,8},
+		{14,17,17,14,17,17,14}, {14,17,17,15,1,1,14},
+		{14,17,17,31,17,17,17}, {30,17,17,30,17,17,30},
+		{14,17,16,16,16,17,14}, {30,17,17,17,17,17,30},
+		{31,16,16,30,16,16,31}, {31,16,16,30,16,16,16}
+	};
+	print("handoff stage %x\n", (uint64_t)stage);
+	if (PLAT != &platform_sweet || SCREEN.base == 0 || SCREEN.width < 64 ||
+	    SCREEN.height < 40 || SCREEN.stride < 256) {
+		return;
+	}
+	for (uint32_t y = 0; y < 40; y++) {
+		volatile uint32_t *row = (volatile uint32_t *)(uintptr_t)(SCREEN.base + y * SCREEN.stride);
+		for (uint32_t x = 0; x < 64; x++) {
+			row[x] = 0xff101030u;
+		}
+	}
+	for (uint32_t digit = 0; digit < 2; digit++) {
+		uint32_t value = (stage >> (digit == 0 ? 4 : 0)) & 15;
+		for (uint32_t y = 0; y < 28; y++) {
+			volatile uint32_t *row = (volatile uint32_t *)(uintptr_t)(SCREEN.base + (y + 6) * SCREEN.stride);
+			for (uint32_t x = 0; x < 20; x++) {
+				if (glyph[value][y / 4] & (1u << (4 - x / 4))) {
+					row[6 + digit * 28 + x] = 0xffffffffu;
+				}
+			}
+		}
+	}
+	clean_dcache(SCREEN.base, SCREEN.base + 40 * SCREEN.stride);
+}
+
 static uint64_t win_base, win_size; /* XNU's physical memory window, claimed once */
 static uint64_t resident_rd_size;   /* root image kept at win_base + RESIDENT_RD_OFFSET, 0 if none */
 static char last_result[64] = "idle";
@@ -2763,6 +2803,7 @@ static int starts_with(const char *s, const char *prefix);
 static int
 run_kernel(int have_checkpoint, uint64_t checkpoint)
 {
+	boot_stage(1);
 	static uint8_t map_buf[65536];
 	uint64_t map_size, map_key, desc_size;
 	uint32_t desc_ver;
@@ -2807,6 +2848,7 @@ run_kernel(int have_checkpoint, uint64_t checkpoint)
 		print("unexpected kernel layout\n");
 		return 0;
 	}
+	boot_stage(2);
 	if (!choose_window(&pi)) {
 		return 0;
 	}
@@ -2852,6 +2894,7 @@ run_kernel(int have_checkpoint, uint64_t checkpoint)
 		return 0;
 	}
 
+	boot_stage(3);
 	/* --- load segments -------------------------------------------------- */
 	lc = (const struct load_command *)(mh + 1);
 	for (uint32_t i = 0; i < mh->ncmds; i++, lc = (const void *)((const uint8_t *)lc + lc->cmdsize)) {
@@ -2874,6 +2917,7 @@ run_kernel(int have_checkpoint, uint64_t checkpoint)
 		print("resident image at pa %x size %x: it is the root (md0), the payload ramdisk is md1\n", rd1_pa, rd1_size);
 	}
 
+	boot_stage(4);
 	/* "bootcpu=N" among the kernel's arguments: run it on core N (see run_on_other_cpu) */
 	uint64_t this_mpidr = READ_SYSREG(MPIDR_EL1) & 0xFFFFFF, kernel_mpidr = this_mpidr;
 	/* "cpus=N" or "cpumask=M" there too: the kernel may have more cores than the one it starts on */
@@ -2924,6 +2968,7 @@ run_kernel(int have_checkpoint, uint64_t checkpoint)
 		kernel_mpidr = this_mpidr;
 	}
 
+	boot_stage(5);
 	/* where the kernel will show its signs of life, and how long it has said it will run */
 	const struct kernel_live *kernel_live = NULL;
 	uint64_t kernel_budget = 0;
@@ -3305,6 +3350,7 @@ run_kernel(int have_checkpoint, uint64_t checkpoint)
 	/* From here on the kernel feeds the watchdog (boot-arg hv_wdt_pet, see loader_return.c in XNU). */
 	wdt_set_ms(60000);
 
+	boot_stage(6);
 	/* --- hand off (UEFI is left resident, see loader_save_ctx) ------------ */
 	if (loader_save_ctx() == 0) {
 		/*
@@ -3326,13 +3372,16 @@ run_kernel(int have_checkpoint, uint64_t checkpoint)
 				}
 			}
 		}
+		boot_stage(7);
 		uint64_t sp_now = (uint64_t)(uintptr_t)__builtin_frame_address(0);
 		clean_dcache(sp_now - 0x2000, sp_now + 0x2000);
 		flush_dcache(phys_base, top);
+		boot_stage(8);
 		if (checkpoint == CHECKPOINT_SELFTEST) {
 			/* Do not enter the kernel at all: exercise only the return path. */
 			jump_to_kernel((uint64_t)(uintptr_t)&loader_return_stub, 0);
 		}
+		boot_stage(9);
 		if (kernel_mpidr != this_mpidr) {
 			int64_t status = run_on_other_cpu(kernel_mpidr, entry_va + slide, ba_pa, kernel_live, slide, kernel_budget);
 
