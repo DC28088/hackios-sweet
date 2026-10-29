@@ -1,3 +1,23 @@
+## Input hardware result: keys post; touch blocked by inherited TCS mode (2026-10-29)
+
+Temporary input run logs/172639-run.log.live: keys find PMIC arbiter v5,
+PON APID199 and PM6150L GPIO APID240, post volume transitions. Some one-poll
+low glitches observed; not all transitions should be claimed as user presses.
+Touch maps correct SM7150 SE7, I2C firmware0x303, FIFO packing readback good.
+L11C vote stops with EBUSY: TCS0 idle1 control0x1010000 enable1; TCS1 idle1
+control0x10000 enable0 wait0. Original rh_free requires control0, so no slot
+accepted and touchscreen probe correctly aborts. No touch events confirmed.
+
+Follow-up08c2e6e: allow only a completely empty idle ACTIVE slot with control
+0 or AMC_EN (no trigger), no wait/enabled commands/pending IRQ; recheck and
+clear inherited AMC_EN before requiring the original free-state predicate.
+Matches the sequence in current HakiOS goodix rpmh_write; populated TCS0,
+sleep/wake payloads and pending transactions still untouched. Key poller now
+requires released-since-boot and two matching samples, following existing
+HakiOS button debounce policy. CI40869721439 building. Current profile still
+selects first input kernel until next artifact verified. Asked user to return
+to FASTBOOT while building. Host run72941 may still poll until manual reset.
+
 ## Sweet input kernel compiled and verified; temporary boot underway (2026-10-29)
 
 CI40868348864/e6ceba3 passed. Downloaded verified kernel to
