@@ -1,3 +1,29 @@
+## A618 step 1d: command processor runs PM4 on the current kernel (2026-10-29)
+
+Stage 9 (sweetgpu=9 = stage 8 + CP) appended to ports/sweet/input/sweet_gpu_boot.c
+from ios-sweet 0096-0106: PM4 builder (0089), SCM aperture + signed-ZAP PAS (0103),
+CB0 context for the CP (0096), SQE start/ring/ME_INIT/fence (0106 cold-SQE fix: no
+CP_SQE_CNTL=3 write to a halted engine). Firmware from fw/ in the image:
+a630_sqe.fw 32136 B CRC 0x691ef4d2, a615_zap.mdt 6860 B, a615_zap.b02 1984 B; ZAP
+reserved region 0x97f15000 (+0x2000) hard-coded as in the original. Allocator now
+takes a size (CP region 0x18000, PAS metadata 0x4000, separate allocations).
+Kernel CI40918499730 (first attempt 40917816498 failed: my splice regex dropped two
+#defines) SUCCESS, SHA256 c332523fcbc2a68addbef42e4de5e7d2523aea6ebd257bdda16ba47f055f1609
+in out/hakios-20261029/kernel-sweet-gpu9. No warnings in sweet_gpu*.
+HARDWARE RESULT (boot logs/224643-run.log.live, BOOTARGS + sweetgpu=9, fresh
+fastboot): stages 4-8 as before; CP SMMU CB0 slot=1 pages=20 translated; signed ZAP
+PAS phase5 status0; SCM aperture phase3; SQE physical readback 8033 words OK;
+all 14 CP snapshots IRQ=0, release SQECTL=1, bootstrap CP2GMU=0x4 at 10 us;
+ME_INIT errno=0 phase=3 12/12 RPTR=WPTR=0xc; leave-secure + fence errno=0 phase=6
+29/29 fence=1 value=0x0618c0de; CB0FSR=0x400 (metadata bit only), FAR/FSYNR=0.
+Same as the original's 0106 record. No panic/reset; UI stayed up.
+Operator: used `./xl stop` then `./xl reboot` (-> Android) and waited for stock fastboot
+before the run; the GMU is never stopped, so reset between sweetgpu runs.
+Not done: any renderer. This only proves GX power via GMU, the CP and a kernel-built
+PM4 fence. GPU acceleration NOT established. Next: command submission for real work
+(ios-sweet 0107-0121: ring ownership, BO/VM core, Turnip/SweetMetal2 userland) is a
+much larger step; wallpaper/blur depend on it. Battery/brightness are independent.
+
 ## A618 step 1c: GMU cold boot and HFI handshake verified (2026-10-29)
 
 Stages 7-8 in ports/sweet/input/sweet_gpu_boot.c (SMMU/HFI/GMU bodies verbatim
