@@ -12,6 +12,7 @@ p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('--upstream', type=Path, required=True)
 p.add_argument('--original-helper', type=Path, default=Path('userland/root'))
 p.add_argument('--output', type=Path, required=True)
+p.add_argument('--gles-dir', type=Path, help='verified current bridge build output')
 a = p.parse_args()
 assert subprocess.check_output(['git', '-C', str(a.upstream), 'rev-parse', 'HEAD'], text=True).strip() == PIN
 for line in (a.upstream / 'prebuilt/SHA256SUMS').read_text().splitlines():
@@ -28,6 +29,14 @@ for name, target in [('init', 'sbin/init'), ('child', 'bin/child')]:
     shutil.copy2(a.upstream / 'prebuilt/userland' / name, root / target)
 for lib in (a.upstream / 'prebuilt/userland').glob('libhakios*.dylib'):
     shutil.copy2(lib, root / 'lib' / lib.name)
+if a.gles_dir is not None:
+    assert (a.gles_dir / 'UPSTREAM_COMMIT').read_text().strip() == PIN
+    for line in (a.gles_dir / 'SHA256SUMS').read_text().splitlines():
+        digest, name = line.split()
+        assert Path(name).name == name
+        assert hashlib.sha256((a.gles_dir / name).read_bytes()).hexdigest() == digest, name
+    for name in ['libOSMesa.8.dylib', 'libhakios.gl.dylib', 'libhakios.dylib', 'libhakios.sb.dylib']:
+        shutil.copy2(a.gles_dir / name, root / 'lib' / name)
 conf = (root / 'etc/inject.conf').read_text()
 for old, new in [('libredwood.dylib', 'libhakios.dylib'),
                  ('libredwood-sb.dylib', 'libhakios.sb.dylib'),
@@ -44,4 +53,5 @@ subprocess.run(['python3', 'tools/apfs/mkapfs.py', '-z', '--plain', 'fw',
     'helper': 'existing iOS16.5 helper layout with verified current init/child/injection libraries',
     'system': 'existing userland/system.apfs, unchanged', 'hardware_verified': False,
     'helper_sha256': hashlib.sha256((a.output / 'root.apfs').read_bytes()).hexdigest(),
+    'gles_provenance': (a.gles_dir / 'PROVENANCE').read_text().strip() if a.gles_dir else None,
 }, indent=2) + '\n')
