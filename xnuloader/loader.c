@@ -2470,9 +2470,20 @@ wdt_arm(void)
 
 extern char __ImageBase;
 
+static volatile int exception_in_progress;
+
 static void EFIAPI
 exception_handler(int64_t type, uint64_t *ctx)
 {
+	/* Firmware console/boot services can themselves fault. A second fault
+	 * must not recursively call ConOut and overwrite the first report. */
+	if (exception_in_progress) {
+		__asm__ volatile ("msr daifset, #0xf" : : : "memory");
+		for (;;) {
+			__asm__ volatile ("wfi");
+		}
+	}
+	exception_in_progress = 1;
 	/* USB mode normally mutes ConOut. A fault before the command loop resumes
 	 * cannot be fetched by the host, so make the report visible before reset. */
 	screen_quiet = 0;
