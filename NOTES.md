@@ -1,3 +1,18 @@
+## Sweet input kernel compiled and verified; temporary boot underway (2026-10-29)
+
+CI40868348864/e6ceba3 passed. Downloaded verified kernel to
+out/hakios-20261029/kernel-sweet-input/mach.development.bcm2837,
+SHA559bcf0341918f93f66d0ea125dbab8d66abed505a735ab03c2d0ca5f11eebaf.
+SWEET_PATCH.sha256 and all4 SWEET_INPUT.sha256 entries match the local source;
+UPSTREAM_COMMIT remains88513176b1e96ecf0b764cd62c6f4e6ac71345e3.
+Current profile now selects that kernel, out/hakios-input-20261029/root.apfs,
+latest loader-usb-replies; adds sweettouch=1 sweetkeys=1 touch_lat=1.
+Temporary RAM boot started in host session72941,
+logs/session-20261029-172450.log, duration900s. Loader accepted, system APFS
+upload in progress. Input hardware not yet qualified; follow live log for
+SWEET TOUCH/KEYS/RPMH and tl: p samples, then ask user to swipe/press buttons.
+No raw partitions written. Previous kernel/helper retained for rollback.
+
 ## Home screen confirmed; Sweet input port building (2026-10-29)
 
 User confirmed current GLES boot reached home screen, but neither touch nor
