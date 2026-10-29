@@ -1,3 +1,26 @@
+## Touch accepted by iOS; SMP enabled with cpus=8 (2026-10-29)
+
+Kernel unchanged (0d1d544d...). Bridge CI40886524209 (commit after e53a58e): the
+patch ports/sweet/patches/inject-service-race.patch now also hooks backboardd's
+-[BKIOHIDService primaryUsage] to return 4 for a digitizer whose usage reads 0
+and logs BK* "supported"/"builtIn" selectors. Libraries
+out/hakios-20261029/current-gles-hook, helper
+out/hakios-input-20261029-hook/root.apfs SHA256
+1e13742b58dc60f6c63cfec29951f62a080e7c8b2b675370cf28298cbabe408e.
+Intermediate attempt (race fix only, CI40884383086): attach line became
+builtin/authenticated but backboardd still read primaryUsage 0 and ignored 288
+events; run 191851.
+Run 192802 (hook): "digitizer attached" shows primaryUsage 0x4 builtIn YES,
+0 "ignoring digitizer" lines, 273 tl: i, backboardd logs "contact 1 presence:
+touching/none". User: touch reaches Settings (press-in), Settings later crashed
+(not investigated), system very slow. Observation: the boot line said cpus=1
+because the profile never passed cpus; the loader defaults to one core.
+Run 193912 with cpus=8 added to sweet-current.conf BOOTARGS: loader started
+core 0x700 (boot) and the kernel reports "7 cpu" (cores 7,6,5,4,3,2,1; CPU0
+stays with the firmware/loader). Responsiveness not yet judged by the user.
+Power: Lock events reach backboardd, but without a backlight driver the screen
+cannot visibly sleep. Settings crash, brightness, battery, Wi-Fi/BT, GPU pending.
+
 ## Touch service race fix built (2026-10-29)
 
 Commit e53a58e; bridge CI40884383086 SUCCESS. Libraries downloaded to
