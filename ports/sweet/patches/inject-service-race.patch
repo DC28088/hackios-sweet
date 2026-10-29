@@ -1,5 +1,5 @@
 --- a/userland/src/inject.c	2026-10-29 19:11:56.414929165 +0530
-+++ b/userland/src/inject.c	2026-10-29 19:11:56.460978932 +0530
++++ b/userland/src/inject.c	2026-10-29 19:25:49.870755041 +0530
 @@ -787,6 +787,16 @@
  	/* the dictionary stays: it is what service_copy_property() answers from */
  	made->properties = properties;
@@ -27,3 +27,86 @@
  	return service;
  }
  
+@@ -899,6 +911,74 @@
+ 	return absolute * timebase.numer / timebase.denom / 1000;
+ }
+ 
++/*
++ * Sweet: backboardd's own record of our touch screen sometimes reads its primary usage as 0
++ * ("primaryUsagePage: 0xD; primaryUsage: 0x0" in its "digitizer attached" and "ignoring digitizer
++ * event ... from unsupported service" lines) although the service says 4 (touch screen). Where it
++ * does, a digitizer record whose usage is 0 is given 4. What else backboardd calls "supported"
++ * is listed once in the log, to find the next check if this is not the one.
++ */
++#include <objc/message.h>
++
++static uint32_t (*orig_bk_usage)(id, SEL);
++static SEL bk_usage_sel, bk_page_sel;
++static unsigned bk_usage_fixed;
++
++static uint32_t
++my_bk_usage(id self, SEL cmd)
++{
++	uint32_t usage = orig_bk_usage(self, cmd);
++
++	if (usage == 0 && ((uint32_t (*)(id, SEL))objc_msgSend)(self, bk_page_sel) == 0xd) {
++		if (bk_usage_fixed++ < 4) {
++			say("hakios: input: backboardd read primary usage 0 of a digitizer service: 4 instead\n");
++		}
++		return 4;
++	}
++	return usage;
++}
++
++static void
++backboardd_service_fixes(void)
++{
++	Class service = objc_getClass("BKIOHIDService");
++	unsigned count = 0, listed = 0;
++	Class *classes = objc_copyClassList(&count);
++
++	bk_usage_sel = sel_registerName("primaryUsage");
++	bk_page_sel = sel_registerName("primaryUsagePage");
++	if (service != NULL && class_getInstanceMethod(service, bk_usage_sel) != NULL &&
++	    class_getInstanceMethod(service, bk_page_sel) != NULL) {
++		Method method = class_getInstanceMethod(service, bk_usage_sel);
++
++		orig_bk_usage = (uint32_t (*)(id, SEL))method_getImplementation(method);
++		method_setImplementation(method, (IMP)my_bk_usage);
++		say("hakios: input: BKIOHIDService primaryUsage hooked\n");
++	} else {
++		say("hakios: input: BKIOHIDService %p has no primaryUsage/primaryUsagePage\n", (void *)service);
++	}
++	for (unsigned i = 0; classes != NULL && i < count; i++) {
++		const char *name = class_getName(classes[i]);
++		unsigned methods = 0;
++		Method *list;
++
++		if (strncmp(name, "BK", 2) != 0) {
++			continue;
++		}
++		list = class_copyMethodList(classes[i], &methods);
++		for (unsigned m = 0; list != NULL && m < methods && listed < 80; m++) {
++			const char *selector = sel_getName(method_getName(list[m]));
++
++			if (strstr(selector, "upported") != NULL || strstr(selector, "uiltIn") != NULL) {
++				say("hakios: input: %s -%s\n", name, selector);
++				listed++;
++			}
++		}
++		free(list);
++	}
++	free(classes);
++}
++
+ static void *
+ input_thread(__unused void *arg)
+ {
+@@ -925,6 +1005,7 @@
+ 		return NULL;
+ 	}
+ 	sleep(3);                       /* let backboardd get as far as starting its event server */
++	backboardd_service_fixes();
+ 	for (unsigned i = 0; screen == NULL && i < sizeof(types) / sizeof(types[0]); i++) {
+ 		/* this waits until the server (this very program) answers */
+ 		client = IOHIDEventSystemClientCreateWithType(NULL, types[i], NULL);
