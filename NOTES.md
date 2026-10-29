@@ -1,3 +1,24 @@
+## VERIFIED MINIMAL USERSPACE (2026-10-29)
+
+logs/162730-run.log includes `Hello from user space on Darwin!`, process1,
+gic virtual timer PPI19 and Darwin22.5.0. Tiny upstream hello deliberately
+exits process1, giving the expected initproc panic; the loader returned the
+full21,966-byte log over USB. Thus current XNU plus minimal userspace works
+on Sweet with the corrected resident loader. This is not an iOS GUI result.
+
+First full APFS attempt reused that returned loader: upload94s and kernel
+staging passed, but preflight get_staged yielded zero bytes and oem run was
+not acknowledged (logs/163007-run.log.*). No new kernel stage shown, so this
+was a USB/loader session failure before actual launch, not a proven kernel
+reset. User manually returned to FASTBOOT. Fresh-loader full APFS retry uses
+`bash common/run.sh sweet-current 180`, logs/session-20261029-163326.log.
+Matched profile explicitly chooses current kernel/working loader/separate
+helper; source changes are on codex/hakios-refresh-20261029.
+
+Latest package: out/hakios-20261029/hakios-sweet-resident.img (separate APFS
+RAM upload still required). Older hakios-sweet-gic.img embeds the older,
+failing cache-walk loader; use the resident image/current run profile instead.
+
 ## FIRST VERIFIED XNU ENTRY/RETURN (2026-10-29)
 
 Loader CI40861302389 (fb4588d), SHA256
