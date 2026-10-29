@@ -3374,6 +3374,15 @@ run_kernel(int have_checkpoint, uint64_t checkpoint)
 			return 1;
 		}
 	}
+	/* On Sweet the loader stays on its firmware CPU with MMU/caches intact.
+	 * Do not take that CPU through a kernel MMU transition: its broad UEFI
+	 * cache walk includes regions that stall cache maintenance on this board. */
+	if (PLAT == &platform_sweet && kernel_mpidr == this_mpidr) {
+		print("sweet: keep the firmware CPU resident; select bootcpu=7\n");
+		set_result("not-started", 0, 0);
+		write_logs(NULL, 0);
+		return 1;
+	}
 	/* --- hand off (UEFI is left resident, see loader_save_ctx) ------------ */
 	if (loader_save_ctx() == 0) {
 		boot_stage(0x0a);
@@ -3384,7 +3393,11 @@ run_kernel(int have_checkpoint, uint64_t checkpoint)
 		 * every allocated region in the memory map, then this stack again.
 		 */
 		map_size = sizeof(map_buf);
-		if (!EFI_ERROR(BS->get_memory_map(&map_size, map_buf, &map_key, &desc_size, &desc_ver))) {
+		/* A separate Sweet CPU enters XNU. Firmware never changes its MMU,
+		 * so leave its unrelated cached state resident. The kernel window,
+		 * handoff context, start record and entry stub are cleaned explicitly. */
+		if (PLAT != &platform_sweet &&
+		    !EFI_ERROR(BS->get_memory_map(&map_size, map_buf, &map_key, &desc_size, &desc_ver))) {
 			for (uint64_t off = 0; off < map_size; off += desc_size) {
 				efi_memory_descriptor *d = (efi_memory_descriptor *)(map_buf + off);
 				/* loader/boot-services/runtime code and data, ACPI tables; XNU's own window is handled below */
