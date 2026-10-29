@@ -1,3 +1,34 @@
+## Home screen confirmed; Sweet input port building (2026-10-29)
+
+User confirmed current GLES boot reached home screen, but neither touch nor
+buttons work. This advances the previous logo-only observation. Live log
+logs/170520-run.log.live records systemShellDidFinishLaunching, dismissing
+Apple logo, and frames up to300. Software softpipe rendering only; still no
+Adreno acceleration. User manually returned to FASTBOOT; previous run session
+6283 ended with stock-fastboot detection (expected manual reset, not a proven
+kernel fault).
+
+User authorized migrating working original ios-sweet features and temporary
+boots. Input source reconstructed from original fe987bf's ordered patches for
+sweet_touch.c/sweet_keys.c/sweet_rpmh.c in ignored research/sweet-input-20261029
+(isolated scratch git repo). Committed portable source under ports/sweet/input.
+Latest standalone SMMU/DDR probe additions excluded from RPMh, retaining the
+existing L11C and resource helpers. HakiOS adapter normalizes coordinates,
+tracks touch down/move/up, maps lock/volume/home keys. sweet=1 switches input
+startup from Redwood drivers to Sweet drivers; individual bootarg disables
+remain. Live diagnostics route through hakios_tl. No tests added or run.
+
+CI40868194811 at a03f88c superseded/cancelled by CI40868348864 at e6ceba3,
+which corrects kernel type include ordering and documents provenance. Latest
+kernel still building; no input hardware claim yet. Workflow adds input source
+hash manifest. Keep latest complete matching kernel for next device boot.
+Separate helper out/hakios-input-20261029/root.apfs prepared with --no-demo;
+SHA5247fe1fc472f4ca0229e09c7170eccf7522290c6722c4dc5ae88a06c0556c3b.
+Inherited com.redwood.demo CPU benchmark and diagnostics are disabled in
+that helper. Current config still points at previous kernel/helper until
+new build is downloaded and verified. Phone detected product sweetin.
+Original ios-sweet working HFS+ root remains intact; no device writes.
+
 ## Current GLES context and frames verified; logo remains (2026-10-29)
 
 User confirmed stock FASTBOOT. Started `bash common/run.sh sweet-current 900`
