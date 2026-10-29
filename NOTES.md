@@ -1,3 +1,20 @@
+## Current GLES context and frames verified; logo remains (2026-10-29)
+
+User confirmed stock FASTBOOT. Started `bash common/run.sh sweet-current 900`
+(host process session6283) with the matched current GLES helper and USB reply
+loader. RAM upload2376MiB completed95s. Live log logs/170520-run.log.live
+confirms all8 EAGLContext methods replaced and an OpenGL ES3.1 Mesa25.0.7
+softpipe context created. First2 frames completed in1.70s and1.50s. Previous
+Metal/OpenGLES context initialization failure is resolved in this run.
+This is software rendering, NOT A618 acceleration. CPU count remains1.
+Screenshots ios-gles-screen.png and ios-gles-screen-2.png under
+out/hakios-20261029 show Apple logo only, no verbose text. SpringBoard pid7
+connected to BackBoard; BootUI reports no explicit screen owner. Home screen
+not verified. Live capture continues; asked user for screen state. Do not
+restart/reflash until collecting this result. No partition writes performed.
+The inherited demo launches cpu_test240; investigate removing that benchmark
+from future helper/UI runs (do not alter executing scripts or original root).
+
 ## FULL APFS IOS USERSPACE VERIFIED; GLES package correction (2026-10-29)
 
 Fresh-loader run logs/163515-run.log completed180s, returning207,498 kernel
