@@ -1,3 +1,23 @@
+## Small-image handoff isolation (2026-10-29)
+
+Full-root Sweet GIC attempt logs/160417-run.log.* reset, host captured stock
+fastboot product in .reset. Small upstream raw-syscall hello (no APFS upload)
+also reset with bootcpu=7 (logs/160736*) and on the firmware's own CPU (no
+bootcpu arg, logs/160943*). Thus the large APFS transfer is not necessary for
+the reset, and the secondary-CPU path alone does not explain it. User also
+confirmed each reset. No live kernel log has yet returned.
+
+Cache maintenance DC/DSB and SMC/HVC wrappers lacked compiler memory clobbers;
+corrected them and restored upstream's O1 loader build. Added a Sweet-only
+framebuffer breadcrumb (two hex digits at top left), independent of ConOut:
+01 enter run_kernel, 02 before window selection, 03 before segment loading,
+04 before argument parsing, 05 before kernel metadata scans/device tree,
+06 before context save/cache work, 07 after memory-map cache cleaning,
+08 after kernel-window cache flushing, 09 before CPU handoff.
+Guarded exception code retained. CI40859401177 (5439f66) passed. Downloading
+and booting the stage loader with the same Sweet GIC kernel and tiny image.
+The breadcrumb is diagnostic; kernel and iOS boot remain unqualified.
+
 ## Sweet GIC build/artifact ready (2026-10-29)
 
 CI40857795079 (15de26b) passed. Upstream remains88513176b1e96ecf0b764cd62c6f4e6ac71345e3;
