@@ -237,9 +237,14 @@ ramdisk() { # ramdisk [<file>|none]
 	fi
 	set -- "${1:-userland/system.apfs}"
 	[ -f "$1" ] || { echo "xl: $1 not found"; return 1; }
-	local t0=$(date +%s) size=$(stat -c %s "$1")
-	fb oem ramdisk | grep -q OKAY || { echo "xl: the loader refused (no memory window?)"; return 1; }
-	FB_TIMEOUT=1800 fb stage "$1" | grep -q OKAY || { echo "xl: upload failed"; return 1; }
+	local t0=$(date +%s) size=$(stat -c %s "$1") stage_log
+	stage_log="logs/$(date +%Y%m%d-%H%M%S)-ramdisk"
+	fb oem ramdisk | tee "$stage_log.prepare" | grep OKAY >/dev/null || {
+		echo "xl: the loader refused; see $stage_log.prepare"; return 1;
+	}
+	FB_TIMEOUT=1800 fb stage "$1" | tee "$stage_log.stage" | grep OKAY >/dev/null || {
+		echo "xl: upload failed; see $stage_log.stage"; return 1;
+	}
 	local dt=$(( $(date +%s) - t0 )); [ $dt -lt 1 ] && dt=1
 	echo "xl: $(( size / 1048576 )) MB uploaded in $dt s ($(( size / 1048576 / dt )) MB/s)"
 	# Who put what there, for `run` to warn about below. The resident image is a third state of

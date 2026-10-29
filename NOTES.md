@@ -1,3 +1,16 @@
+## Follow-up source/loader builds (2026-10-29)
+
+Port patch now also carries Sweet's original working nonsecure GIC distributor
+bits (0x3), Group1NS redistributor grouping and combined EOI mode. Invoke with
+sweet=1 gic_vtimer=19. Current CI40857795079 at15de26b; superseded timer-only
+CI40857525430 cancelled. Guarded loader CI40857678413 atddf46b0 succeeded.
+User described rapid text cycling while UEFI remained on screen; exact words
+not available. Guard stops recursive exception reporting if ConOut faults.
+Cause still unproven. Phone returned manually to FASTBOOT and is detected.
+
+Full ramdisk prepare/stage command output is now saved by xl so upload
+failures retain actual fastboot error text. Earlier grep-only output lost it.
+
 ## Sweet timer routing correction (2026-10-29)
 
 A concrete generic-kernel mismatch was found: upstream gic_v3_irq.c hardcodes
