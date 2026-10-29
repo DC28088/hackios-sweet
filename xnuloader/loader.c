@@ -604,7 +604,7 @@ enum {
 	CTX_X18, CTX_X19, /* ... x30 */
 	CTX_LOG_PA = CTX_X19 + 12, CTX_LOG_LEN, CTX_REASON, CTX_ESR, CTX_ELR, CTX_FAR, CTX_LR, CTX_KSP,
 	CTX_TPIDR_EL1, CTX_TPIDR_EL0, CTX_TPIDRRO_EL0, CTX_SP_EL0, CTX_CONTEXTIDR, CTX_MDSCR, CTX_FPCR, CTX_FPSR,
-	CTX_ICC_PMR, CTX_ICC_IGRPEN1, CTX_ICC_BPR1, CTX_COUNT
+	CTX_ICC_PMR, CTX_ICC_IGRPEN1, CTX_ICC_BPR1, CTX_ICC_SRE, CTX_COUNT
 };
 uint64_t loader_ctx[CTX_COUNT];
 int loader_save_ctx(void);
@@ -636,12 +636,20 @@ __asm__ (
         "  mrs x9, tpidrro_el0\n   str x9, [x10, #296]\n"
         "  mrs x9, contextidr_el1\n str x9, [x10, #312]\n"
         "  mrs x9, mdscr_el1\n     str x9, [x10, #320]\n"
+        /* FPCR/FPSR trap when firmware leaves CPACR.FPEN disabled. */
+        "  ldr x9, [x10, #40]\n"
+        "  orr x9, x9, #0x300000\n"
+        "  msr cpacr_el1, x9\n  isb\n"
         "  mrs x9, s3_3_c4_c4_0\n          str x9, [x10, #328]\n"
         "  mrs x9, s3_3_c4_c4_1\n          str x9, [x10, #336]\n"
-        /* GICv3 CPU interface: the kernel reprograms it for its own interrupts */
+        "  ldr x9, [x10, #40]\n  msr cpacr_el1, x9\n  isb\n"
+        /* Do not access ICC system registers when UEFI uses its MMIO interface. */
+        "  mrs x9, icc_sre_el1\n  str x9, [x10, #368]\n"
+        "  tbz x9, #0, 3f\n"
         "  mrs x9, icc_pmr_el1\n     str x9, [x10, #344]\n"
         "  mrs x9, icc_igrpen1_el1\n str x9, [x10, #352]\n"
         "  mrs x9, icc_bpr1_el1\n    str x9, [x10, #360]\n"
+        "3:\n"
         "  mrs x9, spsel\n"
         "  cbz x9, 1f\n"                  /* SP_EL0 is only accessible while running on SP_EL1 */
         "  mrs x9, sp_el0\n        str x9, [x10, #304]\n"
@@ -676,7 +684,7 @@ __asm__ (
         "  ldr x9, [x10, #8]\n   msr tcr_el1, x9\n"
         "  ldr x9, [x10, #16]\n  msr mair_el1, x9\n"
         "  ldr x9, [x10, #32]\n  msr vbar_el1, x9\n"
-        "  ldr x9, [x10, #40]\n  msr cpacr_el1, x9\n"
+        "  ldr x9, [x10, #40]\n  orr x9, x9, #0x300000\n  msr cpacr_el1, x9\n"
         "  isb\n"
         "  tlbi vmalle1\n"
         "  dsb sy\n"
@@ -698,11 +706,14 @@ __asm__ (
         "  ldr x9, [x10, #296]\n msr tpidrro_el0, x9\n"
         "  ldr x9, [x10, #312]\n msr contextidr_el1, x9\n"
         "  ldr x9, [x10, #320]\n msr mdscr_el1, x9\n"
+        "  ldr x11, [x10, #368]\n  tbz x11, #0, 3f\n"
         "  ldr x9, [x10, #344]\n msr icc_pmr_el1, x9\n"
         "  ldr x9, [x10, #360]\n msr icc_bpr1_el1, x9\n"
         "  ldr x9, [x10, #352]\n msr icc_igrpen1_el1, x9\n"
+        "3:\n  msr icc_sre_el1, x11\n  isb\n"
         "  ldr x9, [x10, #328]\n msr s3_3_c4_c4_0, x9\n"
         "  ldr x9, [x10, #336]\n msr s3_3_c4_c4_1, x9\n"
+        "  ldr x9, [x10, #40]\n  msr cpacr_el1, x9\n  isb\n"
         "  ldr x9, [x10, #104]\n msr cntkctl_el1, x9\n"
         "  ldr x9, [x10, #80]\n  msr cntv_cval_el0, x9\n"
         "  ldr x9, [x10, #72]\n  msr cntv_ctl_el0, x9\n"
@@ -3352,6 +3363,7 @@ run_kernel(int have_checkpoint, uint64_t checkpoint)
 	wdt_set_ms(60000);
 
 	boot_stage(6);
+	print("firmware CPACR_EL1=%x ICC_SRE_EL1=%x\n", READ_SYSREG(CPACR_EL1), READ_SYSREG(ICC_SRE_EL1));
 	/* Return the complete preparation log without switching MMU/CPU state.
 	 * This isolates preparation faults from the first kernel instruction. */
 	for (const char *c = pi.cmdline; *c; c++) {
@@ -3364,6 +3376,7 @@ run_kernel(int have_checkpoint, uint64_t checkpoint)
 	}
 	/* --- hand off (UEFI is left resident, see loader_save_ctx) ------------ */
 	if (loader_save_ctx() == 0) {
+		boot_stage(0x0a);
 		/*
 		 * On real hardware (under the Qualcomm hypervisor) dirty data-cache
 		 * lines do not survive the MMU-off round trip. UEFI stays resident,
