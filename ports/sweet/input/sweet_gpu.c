@@ -580,7 +580,7 @@ sweet_gpu_probe(void)
 	}
 	gpu_probe_attempted = 1;
 	(void)PE_parse_boot_argn("sweetgpu", &enabled, sizeof(enabled));
-	if (enabled < 1 || enabled > 8) {
+	if (enabled < 1 || enabled > 9) {
 		return;
 	}
 	printf("SWEET GPU: GPUCC audit at %#x; stage=%d, no GMU access\n", SWEET_GPUCC_PA, enabled);
