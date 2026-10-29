@@ -1,3 +1,19 @@
+## FIRST VERIFIED XNU ENTRY/RETURN (2026-10-29)
+
+Loader CI40861302389 (fb4588d), SHA256
+2f849fc4a362994ac7f258f3c084fcc1d9d4bb004cfab76f795d0546b64c5fb7,
+reached XNU checkpoint1 on CPU7 and returned cleanly over USB. Full log:
+logs/162645-run-cp1.log. Stages06/0A/07/0B/08/09 all passed; PSCI CPU_ON
+core0x700 returned0. Kernel return reason checkpoint1. This verifies actual
+kernel entry and return on Sweet, not iOS userspace or graphics rendering.
+
+Skipping broad firmware cache walk first advanced to07; skipping the guessed
+firmware stack +/-8KiB clean then got kernel entry working. Cache handling now
+matches separate-CPU residency: leave firmware CPU state/cache intact; clean
+kernel window and explicitly shared handoff data. Original userdata untouched.
+Running the current Sweet GIC kernel with the upstream tiny raw-syscall hello
+image and no checkpoint to capture later startup (logs/162730-run.log.*).
+
 ## Resident-CPU cache change advances to07 (2026-10-29)
 
 Loader CI40860952000 SHA5750dbe0819a2b424ffa423c3f4dd31a6872b51852fcfb1165509d499606bd8f
