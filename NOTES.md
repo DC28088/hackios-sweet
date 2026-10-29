@@ -1,3 +1,23 @@
+## A618 step 1b: GMU clocks and firmware staging verified (2026-10-29)
+
+Stages 5-6 added to ports/sweet/input/sweet_gpu.c (ios-sweet patches 0089-0091:
+GCC GPLL0 vote + bus branches, GPUCC root 200 MHz, GMU/SMMU clocks, SMMU ID
+reads, a618_gmu.bin into the GMU instruction TCM). Firmware read from
+fw/a618_gmu.bin of the small image via hakios_image_file() (md1), CRC32
+0x574c0d4b, SHA256 9ef10b2b...bf2e. Kernel CI40892959028 (commit after 87b43e9)
+SUCCESS, SHA256 edf92a16a093cb2d141308f9adb5377fef0de9529216f70b406f5cfcf618af2b
+in out/hakios-20261029/kernel-sweet-gpu6.
+HARDWARE RESULT (boot logs/201415-run.log.live, BOOTARGS + sweetgpu=6): CX power
+errno=0 control=0xf8228000 status=0x80001fe0; GMU clocks errno=0 completed=6
+(GPUCC 0x1098=0x4ff1); GMU SYSRESET=0x1 (M3 in reset) POWER_STATUS=0xd4
+AHB_FENCE_STATUS=0; SMMU IDR0=0x48016605 IDR1=0x20008005 IDR2=0x7511; 32768
+firmware bytes written and read back, M3 not released. No panic or reset; UI
+stayed up. Not done: releasing the GMU processor (boot), HFI queues, ARC/GX
+power via the GMU, SMMU contexts, SQE/zap/ring, commands, rendering.
+Next: GMU boot over legacy HFI (ios-sweet 0092 DMA/SMMU backend, 0094 PDC/RSCC
+cold boot and bootstrap). This is the first stage where a reset is plausible;
+needs wired uncached DMA memory and an SMMU stage-1 context for stream 5.
+
 ## A618 step 1: stages 1-4 reproduced on the current kernel (2026-10-29)
 
 Source: ports/sweet/input/sweet_gpu.c (from ios-sweet fe987bf patches 0081-0088,
