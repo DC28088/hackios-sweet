@@ -1,0 +1,26 @@
+name: Sweet USB handoff loader
+on:
+  push:
+    branches: [codex/hakios-refresh-20261029]
+    paths: [xnuloader/loader.c, .github/workflows/sweet-loader-current.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  loader:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile Sweet EFI loader
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lld
+          xnuloader/build.sh
+          mkdir -p out/loader-current
+          cp xnuloader/loader.efi out/loader-current/
+          cd out/loader-current
+          sha256sum loader.efi > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sweet-loader-current
+          path: out/loader-current/
