@@ -1,3 +1,20 @@
+## Context save completes; broad UEFI cache pass stalls (2026-10-29)
+
+Preparation logs/162021-run.log reports CPACR_EL1=0x300000 and ICC_SRE_EL1=1:
+FP/GIC accesses were already enabled on this firmware. Guards are defensive,
+not an established root-cause fix. Actual checkpoint1 attempt logs/162030*
+reached marker0A (user confirmed06 ->0A), then reset. This proves loader_save_ctx
+completed and places the failure in the broad firmware memory-map/cache pass
+before07. No kernel instruction has yet been shown to run.
+
+For Sweet's separate-CPU mode, keep firmware CPU/MMU/cache state resident:
+skip the unrelated UEFI descriptor cache walk, retain explicit kernel-window,
+stack, context, entry-stub and start-record maintenance. Reject actual Sweet
+same-CPU kernel runs (preparation-only still allowed), require bootcpu=7.
+CI40860952000 (1da9028) passed. Download/boot first kernel checkpoint with this
+loader next. This is a scoped handoff change; other platforms retain their
+existing cache walk. Original HFS+ installation remains untouched.
+
 ## Preparation succeeds; actual handoff remains at06 (2026-10-29)
 
 Loader CI40859960844 (23e5fb5), SHAda9c1f9bb1692d226d600d75c028f66458a4593a84c32f8def1816ac080dc72b,
