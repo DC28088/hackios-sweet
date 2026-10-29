@@ -1,0 +1,42 @@
+name: Current HakiOS EAGL bridge
+on:
+  push:
+    branches: [codex/hakios-refresh-20261029]
+    paths: [.github/workflows/hakios-current-bridge.yml, ports/sweet/build-current-bridge.sh]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  bridge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Source and verified Mesa input
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git init upstream-current
+          git -C upstream-current fetch --depth 1 https://github.com/oosexgang/hakios-xnu-kernel.git 88513176b1e96ecf0b764cd62c6f4e6ac71345e3
+          git -C upstream-current checkout --detach FETCH_HEAD
+          test "$(git -C upstream-current rev-parse HEAD)" = 88513176b1e96ecf0b764cd62c6f4e6ac71345e3
+          mkdir -p out/current-gles
+          gh run download 39772020663 -R "$GITHUB_REPOSITORY" -n hackios-sweet-gles -D mesa-input
+          cp mesa-input/libOSMesa.8.dylib out/current-gles/
+      - name: Toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang llvm lld flex bison autoconf automake libtool libncurses-dev uuid-dev python3-venv libz-dev
+          bash ports/sweet/setup-toolchain.sh
+      - name: Compile current bridge
+        env:
+          THEOS: ${{ github.workspace }}/.theos
+        run: |
+          xnu-deps/setup.sh --stage1
+          bash ports/sweet/build-current-bridge.sh upstream-current
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hakios-current-gles
+          path: out/current-gles/
