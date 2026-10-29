@@ -46,8 +46,8 @@
 cd "$(dirname "$(readlink -f "$0")")" || exit 1
 # This repository targets Sweet; never fall back to Redwood prebuilt artifacts.
 export UEFI_TARGET=${UEFI_TARGET:-sweet}
-K=out/kernel/mach.development.bcm2837
-L=out/loader/loader.efi
+K=${XL_KERNEL:-out/kernel/mach.development.bcm2837}
+L=${XL_LOADER:-out/loader/loader.efi}
 [ -f "$L" ] || { echo "xl: download/build the Sweet loader into out/loader first"; exit 1; }
 mkdir -p logs
 # There is one phone, whichever working copy (tools/new-workspace.sh) talks to it: the locks are

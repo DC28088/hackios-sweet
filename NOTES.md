@@ -1,3 +1,36 @@
+# Current HakiOS refresh (2026-10-29)
+
+User requests current OOSEX GANG HakiOS on Sweet, while retaining Claude's
+working original ios-sweet installation. Work is on codex/hakios-refresh-20261029.
+Original ios-sweet HEAD fe987bf remains untouched. Phone identifies as sweetin.
+No userdata/recovery/boot partition writes are needed: this is a RAM boot.
+
+Reviewed kernel 88513176b1e96ecf0b764cd62c6f4e6ac71345e3,
+Metal 54a46fadec5bd9684ebd77f3a0834c84b5eb01a6,
+UEFI 687fa6c6a5a70f43184de92980e0a76eea5f2c4b and SM7325
+04fbfff933f52faf203a55aca9dd5680092e6ec5. Userland moved into the kernel
+repository; its old standalone repository is now a pointer. Source/readmes
+and metadata are saved under research/upstream-20261029 (ignored).
+
+Current loader/efi.h is identical to our existing version. Loader diff consists
+of our Sweet platform, RAM-only logs, compiler compatibility and diagnostics,
+plus upstream file renames. Keep the Sweet loader rather than the upstream
+Redwood-only prebuilt. Current upstream A642L startup is not A618 compatible:
+initial boot must use gpu=0 and omit adreno/display_probe and Redwood peripheral
+arguments. Native hakios-metal currently implements copies/fills; its README
+explicitly leaves shader execution unfinished. Mesa GLES supplies the UI.
+
+Added a pinned upstream kernel CI workflow and XL_KERNEL/XL_LOADER overrides
+so experimental outputs do not replace previous compiled components. Build,
+boot and rendering qualification remain separate. Existing APFS system/helper
+are retained; inspect helper compatibility before starting iOS.
+
+User supplied Poco reference: https://github.com/nomorecoolnicknames/hakios-sm8150
+README qualifies GPU, partial audio and main-camera capture on prior hardware
+runs; latest rebuilt tree is not yet rebooted, haptics unverified. Pixel 5 and
+Lisa exact references remain unresolved. CrackerCat/UniXNU-sweet explicitly
+reports no bootable Sweet image yet; it is a different Darwin 23 baseline.
+
 # HackiOS Sweet handoff
 
 ## UEFI boot failure correction (2026-10-22)
