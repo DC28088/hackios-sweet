@@ -9,7 +9,12 @@
  *   2  adds RPMh ARC READ transactions (mx.lvl, cx.lvl, gfx.lvl), 60 s after boot
  *   3  additionally raises only gfx.lvl to LOW_SVS and verifies the readback
  *   4  requires mx.lvl and cx.lvl at LOW_SVS or more, then powers the CX GDSC
- * No GMU, SMMU, GX or command submission at any stage. Shared rails are never lowered.
+ *   5  after 4: enables the GMU and SMMU clocks (GCC GPLL0 vote, bus branches, GPUCC root at
+ *      200 MHz), then reads GMU status and the SMMU ID registers
+ *   6  after 5: stages a618_gmu.bin (fw/ of the small image) into the GMU's instruction TCM and
+ *      reads it back; the GMU's processor stays in reset
+ * No GX, GMU boot, SMMU context or command submission at any stage (stages 5 and 6 are
+ * ios-sweet patches 0089-0091). Shared rails are never lowered.
  */
 #if defined(__arm64__)
 #include <sys/param.h>
@@ -31,6 +36,7 @@ extern int sweet_rpmh_arc_read(const char *res);
 extern int sweet_rpmh_arc_require(const char *res, unsigned minimum);
 extern int sweet_rpmh_arc_raise(const char *res, unsigned target_vlvl);
 extern kern_return_t thread_terminate(thread_t);
+extern const uint8_t *hakios_image_file(const char *dir, const char *name, uint64_t *size, int *disk_out);
 void sweet_gpu_probe(void);
 
 /* LOW_SVS is the first safe GPU corner; the write only raises gfx.lvl. */
@@ -38,6 +44,18 @@ void sweet_gpu_probe(void);
 
 #define SWEET_GPUCC_PA       0x05090000u
 #define SWEET_GPUCC_SIZE     0x00009000u
+#define SWEET_GCC_PA         0x00100000u
+#define SWEET_GCC_SIZE       0x00072000u
+#define SWEET_GMU_PA         0x0506a000u
+#define SWEET_GMU_SIZE       0x00031000u
+#define SWEET_SMMU_PA        0x05040000u
+#define SWEET_SMMU_SIZE      0x00010000u
+#define A618_GMU_SYSRESET    0x14000u
+#define A618_GMU_POWER_STATUS 0x14340u
+#define A618_GMU_AHB_FENCE_STATUS 0x24c4cu
+#define A618_GMU_ITCM        0x3000u
+/* CRC32 of the phone's a618_gmu.bin (SHA256 9ef10b2b...bf2e), as the original verified it. */
+#define A618_GMU_FW_CRC32    0x574c0d4bu
 #define GPU_CC_GX_BCR        0x1008u
 #define GPU_CC_GX_GDSCR      0x100cu
 #define GPU_CC_CX_GDSCR      0x106cu
@@ -135,6 +153,331 @@ gpu_enable_cx(uint32_t *control_out, uint32_t *status_out, unsigned *waited_out)
 	return ETIMEDOUT;
 }
 
+/* An aperture and what the stage 5/6 helpers do to it (ios-sweet sweet_adreno_clock.c, 0091). */
+struct a618_io {
+	vm_offset_t base;
+};
+struct a618_clock_result {
+	unsigned block;
+	uint32_t offset, value;
+	unsigned completed;
+};
+
+static uint32_t
+io_read(const struct a618_io *io, uint32_t offset)
+{
+	uint32_t value = *(volatile uint32_t *)(io->base + offset);
+	__asm__ volatile("dmb oshld" ::: "memory");
+	return value;
+}
+
+static void
+io_write(const struct a618_io *io, uint32_t offset, uint32_t value)
+{
+	__asm__ volatile("dmb oshst" ::: "memory");
+	*(volatile uint32_t *)(io->base + offset) = value;
+	__asm__ volatile("dsb oshst" ::: "memory");
+	(void)io_read(io, offset);
+}
+
+static int
+clk_read(const struct a618_io *io, unsigned block, uint32_t offset, struct a618_clock_result *result)
+{
+	result->block = block;
+	result->offset = offset;
+	result->value = io_read(io, offset);
+	return result->value == 0xffffffffu ? EIO : 0;
+}
+
+static int
+clk_update(const struct a618_io *io, unsigned block, uint32_t offset, uint32_t mask, uint32_t value,
+    struct a618_clock_result *result)
+{
+	int error = clk_read(io, block, offset, result);
+	if (error) {
+		return error;
+	}
+	io_write(io, offset, (result->value & ~mask) | value);
+	error = clk_read(io, block, offset, result);
+	if (error) {
+		return error;
+	}
+	return (result->value & mask) == value ? 0 : EIO;
+}
+
+static int
+clk_poll(const struct a618_io *io, unsigned block, uint32_t offset, uint32_t mask, uint32_t expected,
+    struct a618_clock_result *result)
+{
+	for (unsigned elapsed = 0; elapsed < 500; ++elapsed) {
+		int error = clk_read(io, block, offset, result);
+		if (error) {
+			return error;
+		}
+		if ((result->value & mask) == expected) {
+			return 0;
+		}
+		delay(1);
+	}
+	return ETIMEDOUT;
+}
+
+static int
+clk_branch(const struct a618_io *io, unsigned block, uint32_t offset, struct a618_clock_result *result)
+{
+	int error = clk_update(io, block, offset, 1, 1, result);
+	if (error) {
+		return error;
+	}
+	/* A running NOC FSM may report bit31 set; match Linux branch2 semantics. */
+	for (unsigned elapsed = 0; elapsed < 500; ++elapsed) {
+		error = clk_read(io, block, offset, result);
+		if (error) {
+			return error;
+		}
+		if (!(result->value & (1u << 31)) || ((result->value >> 28) & 7u) == 2) {
+			++result->completed;
+			return 0;
+		}
+		delay(1);
+	}
+	return ETIMEDOUT;
+}
+
+static int
+gpu_enable_gmu_clocks(const struct a618_io *gpucc_io, const struct a618_io *gcc, struct a618_clock_result *result)
+{
+	int error;
+	static const uint32_t bus[] = { 0x4452c, 0x7100c, 0x71018 };
+
+	result->block = result->completed = 0;
+	result->offset = result->value = 0;
+	/* CX power and software control must still be established. */
+	error = clk_read(gpucc_io, 0, 0x106c, result);
+	if (error) {
+		return error;
+	}
+	if (result->value & 3u) {
+		return EAGAIN;
+	}
+	error = clk_read(gpucc_io, 0, 0x1540, result);
+	if (error) {
+		return error;
+	}
+	if (!(result->value & (1u << 31))) {
+		return EAGAIN;
+	}
+	/* GPLL0 is a shared, fixed FABIA PLL. Check 19.2 MHz * 31.25 = 600 MHz before voting its
+	 * output. Never reprogram this system PLL. */
+	error = clk_read(gcc, 1, 0x4, result);
+	if (error) {
+		return error;
+	}
+	if (result->value != 31) {
+		return ERANGE;
+	}
+	error = clk_read(gcc, 1, 0x38, result);
+	if (error) {
+		return error;
+	}
+	if (result->value != 0x4000) {
+		return ERANGE;
+	}
+	error = clk_read(gcc, 1, 0, result);
+	if (error) {
+		return error;
+	}
+	if (result->value & (1u << 20)) {
+		/* FABIA in vote-FSM mode: Linux waits for ACTIVE, not LOCK_DET. */
+		error = clk_update(gcc, 1, 0x52000, 1, 1, result);
+		if (!error) {
+			error = clk_poll(gcc, 1, 0, 1u << 30, 1u << 30, result);
+		}
+	} else {
+		/* Preserve an already running direct-control PLL; its rate was checked above. */
+		if ((result->value & ((1u << 31) | 1u)) != ((1u << 31) | 1u)) {
+			return EBUSY;
+		}
+		error = clk_read(gcc, 1, 0x2c, result);
+		if (!error && result->value != 1) {
+			error = EBUSY;
+		}
+	}
+	if (error) {
+		return error;
+	}
+	/* GCC_GPU_GPLL0_DIV_CLK_SRC: fixed divide by two, 300 MHz. */
+	error = clk_update(gcc, 1, 0x52004, 1u << 16, 1u << 16, result);
+	if (error) {
+		return error;
+	}
+	delay(10);
+	/* Bus clocks named by the GMU and SMMU DT nodes. */
+	for (unsigned i = 0; i < sizeof(bus) / sizeof(bus[0]); ++i) {
+		error = clk_branch(gcc, 1, bus[i], result);
+		if (error) {
+			return error;
+		}
+	}
+	/* The GMU requests CXO; its SMMU requests GPUCC AHB and GCC GPU_SNOC_DVM_GFX. No GX clock or
+	 * GPUCC PLL register is touched. */
+	error = clk_branch(gpucc_io, 0, 0x109c, result);
+	if (!error) {
+		error = clk_branch(gpucc_io, 0, 0x1078, result);
+	}
+	if (error) {
+		return error;
+	}
+	/* RCG2 force-enable while selecting/dividing the existing GCC parent. */
+	error = clk_update(gpucc_io, 0, 0x1120, 2, 2, result);
+	if (error) {
+		return error;
+	}
+	error = clk_poll(gpucc_io, 0, 0x1120, 1u << 31, 0, result);
+	if (error) {
+		return error;
+	}
+	/* SRC_SEL=6, HID_DIV=2: 300 MHz * 2 / (2+1) = 200 MHz. */
+	error = clk_update(gpucc_io, 0, 0x1124, 0x10371fu, 0x602, result);
+	if (error) {
+		return error;
+	}
+	/* UPDATE is self-clearing; do not require immediate readback of bit0. */
+	error = clk_read(gpucc_io, 0, 0x1120, result);
+	if (error) {
+		return error;
+	}
+	io_write(gpucc_io, 0x1120, result->value | 1u);
+	error = clk_poll(gpucc_io, 0, 0x1120, 1, 0, result);
+	if (error) {
+		return error;
+	}
+	error = clk_read(gpucc_io, 0, 0x1124, result);
+	if (error) {
+		return error;
+	}
+	if ((result->value & 0x10371fu) != 0x602) {
+		return EIO;
+	}
+	/* All four WAKE/SLEEP bits before the GMU clock is enabled. */
+	error = clk_update(gpucc_io, 0, 0x1098, 0xff0, 0xff0, result);
+	if (!error) {
+		error = clk_branch(gpucc_io, 0, 0x1098, result);
+	}
+	/* The root stays on for staging; shutdown belongs to the runtime state machine. */
+	return error;
+}
+
+static uint32_t
+little_word(const unsigned char *data)
+{
+	return (uint32_t)data[0] | ((uint32_t)data[1] << 8) | ((uint32_t)data[2] << 16) | ((uint32_t)data[3] << 24);
+}
+
+/* The GMU's firmware into its instruction TCM, read back word by word; its processor stays in reset. */
+static int
+gpu_gmu_stage(const struct a618_io *gmu, const unsigned char *firmware, unsigned size, uint32_t expected_crc,
+    unsigned *verified)
+{
+	uint32_t crc = 0xffffffffu, sp, pc, reset;
+
+	*verified = 0;
+	if (!firmware || size != 0x8000) {
+		return EINVAL;
+	}
+	/* Validate all data before issuing any MMIO. */
+	sp = little_word(firmware);
+	pc = little_word(firmware + 4);
+	if ((sp & 7) || sp < 0x40000 || sp > 0x44000 || !(pc & 1) || (pc & ~1u) >= size) {
+		return EINVAL;
+	}
+	for (unsigned i = 0; i < size; ++i) {
+		crc ^= firmware[i];
+		for (unsigned bit = 0; bit < 8; ++bit) {
+			crc = (crc >> 1) ^ ((0u - (crc & 1u)) & 0xedb88320u);
+		}
+	}
+	if ((crc ^ 0xffffffffu) != expected_crc) {
+		return EIO;
+	}
+	reset = io_read(gmu, A618_GMU_SYSRESET);
+	if (reset == 0xffffffffu) {
+		return EIO;
+	}
+	if (!(reset & 1)) {
+		return EBUSY; /* Never overwrite a potentially running processor. */
+	}
+	for (unsigned offset = 0; offset < size; offset += 4) {
+		uint32_t word = little_word(firmware + offset);
+
+		io_write(gmu, A618_GMU_ITCM + offset, word);
+		if (io_read(gmu, A618_GMU_ITCM + offset) != word) {
+			return EIO;
+		}
+		*verified += 4;
+	}
+	reset = io_read(gmu, A618_GMU_SYSRESET);
+	return reset != 0xffffffffu && (reset & 1) ? 0 : EIO;
+}
+
+/* Stage 5 (clocks, status) and 6 (firmware staging); matches the original: GMU firmware owns GX. */
+static int
+gpu_gmu_prepare(int stage)
+{
+	vm_offset_t gcc_base = ml_io_map(SWEET_GCC_PA, SWEET_GCC_SIZE);
+	vm_offset_t gmu_base = ml_io_map(SWEET_GMU_PA, SWEET_GMU_SIZE);
+	vm_offset_t smmu_base = ml_io_map(SWEET_SMMU_PA, SWEET_SMMU_SIZE);
+	struct a618_io gpucc_io = { gpucc }, gcc_io = { gcc_base }, gmu_io = { gmu_base }, smmu_io = { smmu_base };
+	struct a618_clock_result result;
+	uint32_t reset, power, fence, id0, id1, id2;
+	int error;
+
+	if (!gcc_base || !gmu_base || !smmu_base) {
+		return ENOMEM;
+	}
+	printf("SWEET ADRENO: GMU clocks starting\n");
+	error = gpu_enable_gmu_clocks(&gpucc_io, &gcc_io, &result);
+	printf("SWEET ADRENO: GMU clocks errno=%d block=%u offset=%#x value=%#x completed=%u\n",
+	    error, result.block, result.offset, result.value, result.completed);
+	if (error) {
+		return error;
+	}
+	reset = io_read(&gmu_io, A618_GMU_SYSRESET);
+	power = io_read(&gmu_io, A618_GMU_POWER_STATUS);
+	fence = io_read(&gmu_io, A618_GMU_AHB_FENCE_STATUS);
+	printf("SWEET ADRENO: GMU SYSRESET=%#x POWER_STATUS=%#x AHB_FENCE_STATUS=%#x\n", reset, power, fence);
+	if (reset == 0xffffffffu || power == 0xffffffffu || fence == 0xffffffffu) {
+		return EIO;
+	}
+	/* ID registers only: do not alter SMMU contexts or stream routing. */
+	id0 = io_read(&smmu_io, 0x20);
+	id1 = io_read(&smmu_io, 0x24);
+	id2 = io_read(&smmu_io, 0x28);
+	printf("SWEET ADRENO: SMMU IDR0=%#x IDR1=%#x IDR2=%#x\n", id0, id1, id2);
+	if (id0 == 0xffffffffu || id1 == 0xffffffffu || id2 == 0xffffffffu || !id0) {
+		return EIO;
+	}
+	if (stage == 6) {
+		uint64_t size = 0;
+		int disk = -1;
+		unsigned verified = 0;
+		const uint8_t *firmware = hakios_image_file("fw", "a618_gmu.bin", &size, &disk);
+
+		if (firmware == NULL) {
+			printf("SWEET ADRENO: no fw/a618_gmu.bin in the image; no TCM write\n");
+			return ENOENT;
+		}
+		printf("SWEET ADRENO: fw/a618_gmu.bin: %llu bytes in the image of /dev/md%d\n", size, disk);
+		error = gpu_gmu_stage(&gmu_io, firmware, (unsigned)size, A618_GMU_FW_CRC32, &verified);
+		printf("SWEET ADRENO: GMU TCM staging errno=%d verified_bytes=%u; M3 not released\n", error, verified);
+		if (error) {
+			return error;
+		}
+	}
+	printf("SWEET ADRENO: GMU preparation complete; GX remains firmware controlled, no submission\n");
+	return 0;
+}
+
 /* Pure metadata inspection; valid tables do not establish current votes. */
 static int
 gpu_arc_tables(void)
@@ -179,6 +522,10 @@ gpu_thread(void *arg, wait_result_t result)
 		error = gpu_enable_cx(&control, &status, &waited);
 		printf("SWEET ADRENO: CX result errno=%d control=%#x status=%#x waited_us=%u\n",
 		    error, control, status, waited);
+		if (!error && stage >= 5) {
+			error = gpu_gmu_prepare(stage);
+			printf("SWEET ADRENO: GMU stage=%d finished errno=%d; rendering unavailable\n", stage, error);
+		}
 		goto out;
 	}
 	if (stage == 3) {
@@ -225,7 +572,7 @@ sweet_gpu_probe(void)
 	}
 	gpu_probe_attempted = 1;
 	(void)PE_parse_boot_argn("sweetgpu", &enabled, sizeof(enabled));
-	if (enabled < 1 || enabled > 4) {
+	if (enabled < 1 || enabled > 6) {
 		return;
 	}
 	printf("SWEET GPU: GPUCC audit at %#x; stage=%d, no GMU access\n", SWEET_GPUCC_PA, enabled);
@@ -260,7 +607,7 @@ sweet_gpu_probe(void)
 		return;
 	}
 	if (enabled == 1) {
-		printf("SWEET GPU: read-only audit complete; sweetgpu=2 reads ARC resources, 3 raises gfx.lvl, 4 powers CX\n");
+		printf("SWEET GPU: read-only audit complete; sweetgpu=2 reads ARC resources, 3 raises gfx.lvl, 4 powers CX, 5 GMU clocks, 6 firmware staging\n");
 		return;
 	}
 	gpu_stage = enabled;
