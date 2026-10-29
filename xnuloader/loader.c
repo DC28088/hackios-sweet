@@ -2646,7 +2646,7 @@ static struct {
 	uint32_t width, height, stride;
 } SCREEN;
 /* Sweet handoff breadcrumb independent of UEFI console and USB callbacks.
- * Two hexadecimal digits at the top left survive a stalled firmware callback. */
+ * Two hexadecimal digits inset from the screen edges survive a stalled firmware callback. */
 static void
 boot_stage(uint32_t stage)
 {
@@ -2661,28 +2661,29 @@ boot_stage(uint32_t stage)
 		{31,16,16,30,16,16,31}, {31,16,16,30,16,16,16}
 	};
 	print("handoff stage %x\n", (uint64_t)stage);
-	if (PLAT != &platform_sweet || SCREEN.base == 0 || SCREEN.width < 64 ||
-	    SCREEN.height < 40 || SCREEN.stride < 256) {
+	if (PLAT != &platform_sweet || SCREEN.base == 0 || SCREEN.width < 416 ||
+	    SCREEN.height < 320 || SCREEN.stride < 1664) {
 		return;
 	}
-	for (uint32_t y = 0; y < 40; y++) {
-		volatile uint32_t *row = (volatile uint32_t *)(uintptr_t)(SCREEN.base + y * SCREEN.stride);
-		for (uint32_t x = 0; x < 64; x++) {
+	uint64_t marker = SCREEN.base + 160 * SCREEN.stride + 80 * 4;
+	for (uint32_t y = 0; y < 160; y++) {
+		volatile uint32_t *row = (volatile uint32_t *)(uintptr_t)(marker + y * SCREEN.stride);
+		for (uint32_t x = 0; x < 256; x++) {
 			row[x] = 0xff101030u;
 		}
 	}
 	for (uint32_t digit = 0; digit < 2; digit++) {
 		uint32_t value = (stage >> (digit == 0 ? 4 : 0)) & 15;
-		for (uint32_t y = 0; y < 28; y++) {
-			volatile uint32_t *row = (volatile uint32_t *)(uintptr_t)(SCREEN.base + (y + 6) * SCREEN.stride);
-			for (uint32_t x = 0; x < 20; x++) {
-				if (glyph[value][y / 4] & (1u << (4 - x / 4))) {
-					row[6 + digit * 28 + x] = 0xffffffffu;
+		for (uint32_t y = 0; y < 112; y++) {
+			volatile uint32_t *row = (volatile uint32_t *)(uintptr_t)(marker + (y + 24) * SCREEN.stride);
+			for (uint32_t x = 0; x < 80; x++) {
+				if (glyph[value][y / 16] & (1u << (4 - x / 16))) {
+					row[24 + digit * 112 + x] = 0xffffffffu;
 				}
 			}
 		}
 	}
-	clean_dcache(SCREEN.base, SCREEN.base + 40 * SCREEN.stride);
+	clean_dcache(marker, marker + 160 * SCREEN.stride);
 }
 
 static uint64_t win_base, win_size; /* XNU's physical memory window, claimed once */
@@ -3351,6 +3352,16 @@ run_kernel(int have_checkpoint, uint64_t checkpoint)
 	wdt_set_ms(60000);
 
 	boot_stage(6);
+	/* Return the complete preparation log without switching MMU/CPU state.
+	 * This isolates preparation faults from the first kernel instruction. */
+	for (const char *c = pi.cmdline; *c; c++) {
+		if ((c == pi.cmdline || c[-1] == ' ') && starts_with(c, "loader_prepare_only=1") &&
+		    (c[21] == 0 || c[21] == ' ')) {
+			set_result("prepared", kern_lo, entry_va + slide);
+			write_logs(NULL, 0);
+			return 1;
+		}
+	}
 	/* --- hand off (UEFI is left resident, see loader_save_ctx) ------------ */
 	if (loader_save_ctx() == 0) {
 		/*
