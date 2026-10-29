@@ -1,3 +1,16 @@
+## Touch service race fix built (2026-10-29)
+
+Commit e53a58e; bridge CI40884383086 SUCCESS. Libraries downloaded to
+out/hakios-20261029/current-gles-race (SHA256SUMS verified, upstream 88513176,
+libhakios.dylib contains the new "stays/was never opened" log line). New helper
+out/hakios-input-20261029-race/root.apfs, SHA256
+0d6dd70e0bb4739b3bef17adb4c990f2d8ae74da23ca7da4d4643cd1dfe9cd4f, built with
+prepare-current-helper.py --no-demo; sweet-current.conf now selects it. Kernel
+unchanged (0d1d544d...). Resident loader and system image still in phone RAM at
+last check. NOT yet booted: the race is probabilistic (1 of 2 runs bad), so one
+good run does not prove the fix; success criteria are zero "ignoring digitizer
+event" lines in the log and "builtIn: YES" in the "digitizer attached" line.
+
 ## Run 185703: touch events reach backboardd but are ignored (2026-10-29)
 
 First attempt 185252 reset to stock fastboot before any log (no .live; same
