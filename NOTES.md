@@ -1,3 +1,21 @@
+## Preparation succeeds; actual handoff remains at06 (2026-10-29)
+
+Loader CI40859960844 (23e5fb5), SHAda9c1f9bb1692d226d600d75c028f66458a4593a84c32f8def1816ac080dc72b,
+with loader_prepare_only=1 returned `prepared` over USB. Full logs/161610-run.log
+shows kernel at103004000..104284000, entry10344e4a8, return slot10344f7f0,
+DT10428c000, boot_args10429c000, top1042a0000; framebuffer/identity/preparation
+completed. Follow-up earliest kernel checkpoint1 (logs/161636-run-cp1*) reset;
+user read the enlarged marker as06. This is before kernel entry, in context
+save or the broad firmware cache-cleaning section. Prior clipped marker was
+unreliable (user reported06/08); the preparation-only06 is deliberate.
+
+Added FPEN guards for FPCR/FPSR save/restore; restore originally wrote FP
+control after restoring potentially disabled CPACR. GIC ICC state save/restore
+now checks/preserves ICC_SRE. Added CPACR/SRE preparation logging and stage0A
+immediately after loader_save_ctx to separate context saving from cache walk.
+CI40860579008 (b005741) passed; downloading/booting guarded preparation profile.
+No root/peripheral changes. Kernel/iOS boot still unqualified.
+
 ## Small-image handoff isolation (2026-10-29)
 
 Full-root Sweet GIC attempt logs/160417-run.log.* reset, host captured stock
