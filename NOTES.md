@@ -1,3 +1,16 @@
+## Sweet GIC build/artifact ready (2026-10-29)
+
+CI40857795079 (15de26b) passed. Upstream remains88513176b1e96ecf0b764cd62c6f4e6ac71345e3;
+SWEET_PATCH.sha256 matches the reviewed local patch script. Kernel SHA256
+f63881fd45383ed03db826daa0979d03d9e428c66ecb0cef6649712bf4370c13.
+Guarded loader CI40857678413 (ddf46b0), SHA256
+a8d2d6c84210e171e6454ba2a6b61fc5926511231199a059c04a056295074cb9.
+Packaged out/hakios-20261029/hakios-sweet-gic.img, 8,046,592 bytes, SHA256
+2d2292bc5a9cffe7b564d65a0df02c162257f7eea381bd37cf75a43c00f57b06.
+The matching JSON contains firmware, DTB and loader hashes. Loader enumerated;
+APFS upload and boot with -v sweet=1 gic_vtimer=19 bootcpu=7 gpu=0 underway.
+Hardware/kernel/UI results still pending. Existing HFS+ userdata untouched.
+
 ## Follow-up source/loader builds (2026-10-29)
 
 Port patch now also carries Sweet's original working nonsecure GIC distributor
