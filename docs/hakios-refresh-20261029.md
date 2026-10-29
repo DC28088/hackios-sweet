@@ -38,3 +38,31 @@ legacy HFI/power/clock configuration, SMMU mapping and command submission wired
 into the current HakiosGPU userspace interface. The original working port's
 Wi-Fi/BT/battery changes need corresponding integration; they do not transfer
 just by changing the kernel image.
+
+## Verified kernel entry and userspace (2026-10-29)
+
+The Sweet-specific interrupt kernel CI40857795079 and loader CI40861302389
+reached kernel checkpoint1, then the upstream tiny raw-syscall program ran
+and printed `Hello from user space on Darwin!`. Its deliberate process1 exit
+produced the expected panic and returned logs over USB. Evidence:
+`logs/162645-run-cp1.log` and `logs/162730-run.log` (ignored local outputs).
+The log confirms virtual timer PPI19. This qualifies XNU startup and minimal
+userspace, with iOS GUI/peripherals still pending.
+
+The reset was localized with screen markers: context saving completed (0A),
+but cache cleaning of broad firmware regions and a guessed stack +/-8KiB
+range stalled. Sweet now keeps the firmware CPU/MMU/cache resident and runs
+XNU on CPU7. Firmware stack/cache state stays on its own CPU; explicitly
+shared context/start buffers, entry stub and kernel window are still cleaned.
+Direct same-CPU Sweet runs are rejected, except preparation-only requests.
+
+To boot the matched local components after they have been downloaded/prepared:
+
+```sh
+bash common/run.sh sweet-current 900
+```
+
+This profile selects current kernel, corrected resident loader and separate
+helper explicitly; the original Sweet profile retains its old components.
+It uploads APFS into RAM and does not flash userdata. GPU initialization stays
+off until the A618 driver has been adapted to this kernel's interfaces.

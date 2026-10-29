@@ -11,7 +11,7 @@
 load_device "$1"
 SECS=${2:-$DEFAULT_SECS}
 mkdir -p logs
-[ -f userland/root.apfs ] && [ -f userland/system.apfs ] || die "no images: run common/build.sh $DEVICE first"
+[ -f "${XL_RAMDISK:-userland/root.apfs}" ] && [ -f userland/system.apfs ] || die "no images: run common/build.sh $DEVICE first"
 
 case "$KIND" in
 qemu)
