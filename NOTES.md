@@ -1,3 +1,22 @@
+## A618 step 1: stages 1-4 reproduced on the current kernel (2026-10-29)
+
+Source: ports/sweet/input/sweet_gpu.c (from ios-sweet fe987bf patches 0081-0088,
+docs/GPU_PROGRESS.md there), wired through hakios_sweet_input_init(); boot-arg
+sweetgpu=1..4, off by default, independent of the A642L driver (gpu=0 stays).
+Kernel CI40890746478 (commit 94df36f) SUCCESS; kernel SHA256
+c75c39ec9433fd5ae12dde49699a8e6b43703b966367a3293ed1e1b698de8cac in
+out/hakios-20261029/kernel-sweet-gpu1. Boot run logs/195939-run.log.live with
+BOOTARGS + sweetgpu=4 (cpus=8 gl=0), helper out/hakios-input-20261029-hook.
+HARDWARE RESULT: audit CX_GDSCR=0x222001 CX_HW_CTRL=0x5ff4 GX_GDSCR=0x222001
+GX_DOMAIN=0x1; all ten GPUCC CBCRs clk_off; ARC tables read; at 60 s the CX
+GDSC powered: errno=0 control=0xf8228000 status=0x80001fe0 waited_us=1 -- the
+same values the original port logged on 2026-10-19. No panic or reset.
+Not done: GPU/GMU clocks, GX, firmware, GMU boot, HFI, SMMU, ring/SQE/zap,
+any command, any rendering; GPU acceleration is NOT established.
+Next (stage 5/6 of the original plan): GMU/bus clocks with frequency counter
+checks, SMMU IDs, GMU TCM firmware staging (a618_gmu.bin in fw-gpu), then GMU
+boot over legacy HFI; the earlier ios-sweet patches 0089-0094 are the source.
+
 ## Performance: gl=0 and cpus=8 (2026-10-29)
 
 Run 193912 (cpus=8, gl=1): hakios-gl frames ~1 s each (softpipe, 3 draws,
