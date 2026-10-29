@@ -1,3 +1,28 @@
+## Run 185703: touch events reach backboardd but are ignored (2026-10-29)
+
+First attempt 185252 reset to stock fastboot before any log (no .live; same
+kernel/helper/upload as earlier runs); retry 185703 booted to a dim lock
+screen. User: touch, swipe, Power and Volume Down all did nothing.
+Observations (logs/185703-run.log.live): kernel posted 420 touch events
+(tl: i) and backboardd answered 423x "[TouchEvents] ignoring digitizer event
+for display <main> from unsupported service" for our service: displayUUID 0x0,
+eventSource externalAccessory, builtIn NO, authenticated NO. backboardd also
+logged "[HID] strangeness: primary page is zero" for the service, then a second
+"IOHIDEventSystemServer died. Reestablishing connection" ~2 s after our service
+was made, and holds two BKIOHIDService objects for sender 0x1010403600001.
+Run 173540 (same kernel) had 0 "ignoring" lines, 225 tl: i, and a
+"system gesture stealing the touches" log, so this is a startup race in the
+helper's virtual HID service (inject.c make_service), not a Goodix problem.
+Guess (unverified): the event server restart after the service is opened drops
+or half-restores its properties; fix is to re-make the service when the server
+dies again, or to wait for backboardd's reconnect before making it.
+Buttons: key 0 (Lock) fired 36 down/up pairs incl. bursts of 6 within ~1 s
+that no one pressed; key 2 (Vol Down) 5 pairs. Spurious Lock presses also toggle
+the screen off/on ("backlight dim/off" cancelling touches), so Power debounce
+is still insufficient. Phone returned/left running; no device writes.
+Next: fix helper service re-creation (prepare-current-helper.py / inject.c),
+tighten Lock key glitch filter, CI build, retry.
+
 ## Log review of 173540 run: touch and key events reach iOS (2026-10-29)
 
 Observation from logs/173540-run.log.live (device now absent from USB, so no
