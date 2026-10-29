@@ -1,3 +1,14 @@
+## Resident-CPU cache change advances to07 (2026-10-29)
+
+Loader CI40860952000 SHA5750dbe0819a2b424ffa423c3f4dd31a6872b51852fcfb1165509d499606bd8f
+advanced actual checkpoint1 attempt logs/162334* from0A to07 (user-confirmed),
+then reset. Broad UEFI cache walk has been bypassed. Remaining stall is either
+the guessed stack cache range or the subsequent kernel-window flush.
+Removed Sweet's sp +/-8KiB clean (firmware CPU/MMU/cache remains live and
+kernel CPU never accesses its stack); add0B immediately before kernel-window
+flush. Other platforms retain existing stack handling. CI40861302389 atfb4588d
+running. No kernel-entry checkpoint reached yet; do not call this an XNU boot.
+
 ## Context save completes; broad UEFI cache pass stalls (2026-10-29)
 
 Preparation logs/162021-run.log reports CPACR_EL1=0x300000 and ICC_SRE_EL1=1:
