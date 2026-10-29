@@ -897,6 +897,7 @@ a618_zap_authenticate(volatile uint32_t *reserved, uint64_t physical,
  * Original bounded SMMUv2 backend using the ARM architecture and public
  * Linux/Qualcomm register protocols. See docs/adreno-port.md for source pins.
  */
+#define CP_CB 0x8000u
 #define CP_ASID 0x62u
 static int
 cp_put(const struct a618_io *io, uint32_t offset, uint32_t value,
@@ -1044,6 +1045,7 @@ a618_smmu_prepare_cp(const struct a618_smmu_io *ops,
  * Bounded kernel-only A618 SQE/CP bring-up from pinned public PM4/register
  * protocols. No userspace PM4, scheduling, 3D context or graphics advertising.
  */
+#define CP_RB_BASE 0x2000u
 #define CP_RB_CNTL 0x2008u
 #define CP_RB_RPTR_ADDR 0x2010u
 #define CP_RB_RPTR 0x2018u
