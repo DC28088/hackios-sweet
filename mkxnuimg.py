@@ -36,7 +36,7 @@ args = ap.parse_args()
 
 if TARGET == 'sweet':
     subprocess.check_call([sys.executable,os.path.join(HERE,'ports/sweet/package.py'),
-      '--firmware',os.path.join(HERE,'out/firmware'),'--loader',os.path.join(HERE,'out/loader/loader.efi'),
+      '--firmware',os.path.join(HERE,'out/firmware'),'--loader',os.environ.get('XL_LOADER') or os.path.join(HERE,'out/loader/loader.efi'),
       '--template',os.path.join(HERE,'out/firmware/template.img'),'--out',args.output])
     sys.exit(0)
 
