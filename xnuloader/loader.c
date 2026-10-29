@@ -86,6 +86,7 @@ static efi_boot_services *BS;
 static efi_handle IMAGE;
 
 static char log_buf[32768];
+static int usb_logs_only;
 static uint32_t log_len;
 
 void *
@@ -320,6 +321,10 @@ compose_logs(const char *klog, uint64_t klog_len)
 		memcpy(out_buf + n, end, sizeof(end) - 1);
 		n += sizeof(end) - 1;
 	}
+	/* Some firmware USB stacks stall on a zero-length staged transfer. */
+	if (n == 0) {
+		out_buf[n++] = '\n';
+	}
 	staged_len = n;
 }
 
@@ -336,7 +341,7 @@ write_logs(const char *klog, uint64_t klog_len)
 	compose_logs(klog, klog_len);
 	if (bio == NULL) {
 		/* No log partition (QEMU): echo the returned kernel log on the console instead. */
-		if (klog != NULL) {
+		if (klog != NULL && !usb_logs_only) {
 			print("\n== KERNEL LOG ==\n");
 			for (uint64_t i = 0; i < klog_len; i++) {
 				put_char(klog[i]);
@@ -2701,19 +2706,42 @@ static uint64_t win_base, win_size; /* XNU's physical memory window, claimed onc
 static uint64_t resident_rd_size;   /* root image kept at win_base + RESIDENT_RD_OFFSET, 0 if none */
 static char last_result[64] = "idle";
 
+/* Protocol replies must not depend on space remaining in the log buffer. */
+static void
+reply_char(char *buf, uint32_t cap, uint32_t *n, char c)
+{
+	if (*n + 1 < cap) {
+		buf[(*n)++] = c;
+	}
+	buf[*n] = 0;
+}
+
+static void
+reply_number(char *buf, uint32_t cap, uint32_t *n, uint64_t value, uint32_t base)
+{
+	char digits[32];
+	uint32_t count = 0;
+	do {
+		digits[count++] = "0123456789abcdef"[value % base];
+		value /= base;
+	} while (value != 0);
+	while (count != 0) {
+		reply_char(buf, cap, n, digits[--count]);
+	}
+}
+
 static void
 set_result(const char *what, uint64_t a, uint64_t b)
 {
-	uint32_t saved = log_len;
-	uint32_t start = log_len;
-	print("%s %d %x", what, a, b);
-	uint32_t n = log_len - start;
-	if (n > sizeof(last_result) - 1) {
-		n = sizeof(last_result) - 1;
+	uint32_t n = 0;
+	last_result[0] = 0;
+	while (*what) {
+		reply_char(last_result, sizeof(last_result), &n, *what++);
 	}
-	memcpy(last_result, log_buf + start, n);
-	last_result[n] = 0;
-	log_len = saved;
+	reply_char(last_result, sizeof(last_result), &n, ' ');
+	reply_number(last_result, sizeof(last_result), &n, a, 10);
+	reply_char(last_result, sizeof(last_result), &n, ' ');
+	reply_number(last_result, sizeof(last_result), &n, b, 16);
 }
 
 /* Every range of the firmware's memory map of 1 MB or more, and the total of each type. */
@@ -3753,11 +3781,14 @@ fb_command(char *cmd)
 				fb_reply("OKAY", last_result);
 			} else if (str_eq(var, "screen") && SCREEN.base != 0) {
 				/* width height bytes-per-row */
-				uint32_t mark = log_len;
-				print("%d %d %d", (uint64_t)SCREEN.width, (uint64_t)SCREEN.height, (uint64_t)SCREEN.stride);
-				log_buf[log_len] = 0;
-				fb_reply("OKAY", log_buf + mark);
-				log_len = mark;
+				char geometry[64] = { 0 };
+				uint32_t n = 0;
+				reply_number(geometry, sizeof(geometry), &n, SCREEN.width, 10);
+				reply_char(geometry, sizeof(geometry), &n, ' ');
+				reply_number(geometry, sizeof(geometry), &n, SCREEN.height, 10);
+				reply_char(geometry, sizeof(geometry), &n, ' ');
+				reply_number(geometry, sizeof(geometry), &n, SCREEN.stride, 10);
+				fb_reply("OKAY", geometry);
 			} else {
 				fb_reply("OKAY", "");
 			}
@@ -4077,6 +4108,7 @@ efi_main(efi_handle image, efi_system_table *st)
 		print("display %d x %d at %x\n", (uint64_t)SCREEN.width, (uint64_t)SCREEN.height, SCREEN.base);
 	}
 	print("platform %s\n", PLAT->name);
+	usb_logs_only = PLAT == &platform_sweet;
 
 	install_exception_hook();
 	wdt_arm();
